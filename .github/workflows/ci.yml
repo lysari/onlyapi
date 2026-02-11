@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type-check, Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check
+        run: bun run check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-test-secret-that-is-definitely-at-least-32-characters-long!!
+          JWT_EXPIRES_IN: 15m
+          JWT_REFRESH_EXPIRES_IN: 7d
+          PORT: 3199
+          HOST: 127.0.0.1
+          CORS_ORIGINS: "*"
+          LOG_LEVEL: error
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
