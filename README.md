@@ -74,7 +74,56 @@ src/
 
 - [Bun](https://bun.sh) >= 1.1
 
-### Install & Run
+### Create a New Project (CLI)
+
+The fastest way to get started — scaffold a full project with one command:
+
+```bash
+# Using bunx (recommended)
+bunx onlyapi init my-api
+
+# Or install globally
+bun install -g only-api
+onlyapi init my-api
+
+# Initialize in the current directory
+onlyapi init .
+```
+
+The `init` command will:
+1. Clone the latest template from GitHub
+2. Install dependencies via `bun install`
+3. Generate a secure random `JWT_SECRET`
+4. Create `.env` from `.env.example`
+5. Initialize a fresh git repository with an initial commit
+
+### Upgrade an Existing Project
+
+Keep your project's core infrastructure up to date:
+
+```bash
+# In your project directory
+onlyapi upgrade
+
+# Preview changes without applying
+onlyapi upgrade --dry-run
+
+# Force re-apply even if on latest version
+onlyapi upgrade --force
+```
+
+The upgrade command safely updates framework internals (middleware, security, utilities, config) while preserving your custom code (handlers, services, entities, routes).
+
+### CLI Commands Reference
+
+| Command | Description |
+|---------|-------------|
+| `onlyapi init <name>` | Create a new project (aliases: `create`, `new`) |
+| `onlyapi upgrade` | Upgrade current project (alias: `update`) |
+| `onlyapi version` | Show CLI version |
+| `onlyapi help` | Show help with all options |
+
+### Install & Run (Manual)
 
 ```bash
 # Clone
@@ -172,6 +221,9 @@ All configuration is loaded via environment variables and validated with Zod at 
 | `test:watch` | `bun test --watch` | Tests in watch mode |
 | `lint` | `biome check src/` | Lint with Biome |
 | `lint:fix` | `biome check --write src/` | Auto-fix lint issues |
+| `cli` | `bun src/cli/index.ts` | Run CLI tool |
+| `create` | `bun src/cli/index.ts init` | Create a new project |
+| `upgrade:project` | `bun src/cli/index.ts upgrade` | Upgrade current project |
 
 ## Performance
 

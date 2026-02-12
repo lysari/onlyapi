@@ -1,5 +1,5 @@
 {
-  "name": "only-api",
+  "name": "@tasvet/onlyapi",
   "version": "1.0.0",
   "description": "Zero-dependency, enterprise-grade REST API built on Bun — fastest runtime, strictest TypeScript, cleanest architecture.",
   "type": "module",
@@ -13,7 +13,12 @@
     "hexagonal",
     "enterprise",
     "performance",
-    "server"
+    "server",
+    "cli",
+    "scaffold",
+    "generator",
+    "starter",
+    "boilerplate"
   ],
   "repository": {
     "type": "git",
@@ -24,19 +29,37 @@
   },
   "homepage": "https://github.com/lysari/onlyapi#readme",
   "author": "lysari",
+  "bin": {
+    "onlyapi": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "bun": ">=1.1.0"
   },
   "scripts": {
+    "cli": "bun src/cli/index.ts",
     "dev": "bun --watch src/main.ts",
     "start": "NODE_ENV=production bun src/main.ts",
     "start:cluster": "NODE_ENV=production bun src/cluster.ts",
     "build": "bun build src/main.ts --target=bun --outdir=dist --minify",
+    "build:cli": "bun build src/cli/index.ts --target=bun --outfile=dist/cli.js --minify",
+    "prepublishOnly": "bun run build:cli",
     "check": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "lint": "bunx @biomejs/biome check src/",
-    "lint:fix": "bunx @biomejs/biome check --write src/"
+    "lint:fix": "bunx @biomejs/biome check --write src/",
+    "create": "bun src/cli/index.ts init",
+    "upgrade:project": "bun src/cli/index.ts upgrade"
   },
   "dependencies": {
     "zod": "^3.24.2"

@@ -42,6 +42,6 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/cli/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
