@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createPasswordHasher } from "../../src/infrastructure/security/password-hasher.js";
 
 describe("PasswordHasher (Argon2id)", () => {

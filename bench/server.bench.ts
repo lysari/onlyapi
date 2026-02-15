@@ -53,8 +53,12 @@ for (let i = 0; i < ITERATIONS; i++) {
 const extractTime = performance.now() - t0;
 
 console.log("=== URL Parsing Benchmark ===");
-console.log(`new URL():      ${urlTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`);
-console.log(`extractPath():  ${extractTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`);
+console.log(
+  `new URL():      ${urlTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`,
+);
+console.log(
+  `extractPath():  ${extractTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`,
+);
 console.log(`Speedup:        ${(urlTime / extractTime).toFixed(1)}x faster\n`);
 
 // 2. Route lookup: Map.get() vs regex/trie
@@ -73,7 +77,9 @@ for (let i = 0; i < ITERATIONS; i++) {
 const mapTime = performance.now() - t0;
 
 console.log("=== Route Lookup Benchmark ===");
-console.log(`Map.get():      ${mapTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`);
+console.log(
+  `Map.get():      ${mapTime.toFixed(2)}ms for ${ITERATIONS.toLocaleString()} iterations`,
+);
 console.log(`Per lookup:     ${((mapTime / ITERATIONS) * 1_000_000).toFixed(0)}ns\n`);
 
 // 3. Header pre-computation vs per-request spread

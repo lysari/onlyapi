@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { CircuitState } from "../../src/core/ports/circuit-breaker.js";
 import {
-  createCircuitBreaker,
   CircuitBreakerOpenError,
+  createCircuitBreaker,
 } from "../../src/infrastructure/resilience/circuit-breaker.js";
 
 describe("Circuit Breaker", () => {

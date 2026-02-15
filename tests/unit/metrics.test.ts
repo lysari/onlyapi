@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { createMetricsCollector } from "../../src/infrastructure/metrics/prometheus.js";
 
 describe("Prometheus Metrics", () => {
@@ -58,16 +58,16 @@ describe("Prometheus Metrics", () => {
     });
 
     it("populates histogram buckets correctly", () => {
-      metrics.httpRequestDurationMs.observe(3);   // fits in 5, 10, 25, ...
-      metrics.httpRequestDurationMs.observe(15);  // fits in 25, 50, ...
+      metrics.httpRequestDurationMs.observe(3); // fits in 5, 10, 25, ...
+      metrics.httpRequestDurationMs.observe(15); // fits in 25, 50, ...
       metrics.httpRequestDurationMs.observe(150); // fits in 250, 500, ...
 
       const snapshot = metrics.httpRequestDurationMs.get();
       expect(snapshot).toBeDefined();
-      expect(snapshot?.buckets.get(5)).toBe(1);     // only 3ms fits
-      expect(snapshot?.buckets.get(10)).toBe(1);    // only 3ms fits
-      expect(snapshot?.buckets.get(25)).toBe(2);    // 3ms + 15ms
-      expect(snapshot?.buckets.get(250)).toBe(3);   // all three
+      expect(snapshot?.buckets.get(5)).toBe(1); // only 3ms fits
+      expect(snapshot?.buckets.get(10)).toBe(1); // only 3ms fits
+      expect(snapshot?.buckets.get(25)).toBe(2); // 3ms + 15ms
+      expect(snapshot?.buckets.get(250)).toBe(3); // all three
     });
 
     it("serializes histogram with cumulative buckets", () => {

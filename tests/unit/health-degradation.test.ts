@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
-import { CircuitState } from "../../src/core/ports/circuit-breaker.js";
-import { createCircuitBreaker } from "../../src/infrastructure/resilience/circuit-breaker.js";
+import { describe, expect, it } from "bun:test";
 import { createHealthService } from "../../src/application/services/health.service.js";
+import { CircuitState } from "../../src/core/ports/circuit-breaker.js";
 import { createLogger } from "../../src/infrastructure/logging/logger.js";
+import { createCircuitBreaker } from "../../src/infrastructure/resilience/circuit-breaker.js";
 
 describe("Graceful Degradation", () => {
   const logger = createLogger("error"); // quiet

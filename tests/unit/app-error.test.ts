@@ -1,15 +1,15 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
-  badRequest,
-  unauthorized,
-  forbidden,
-  notFound,
-  conflict,
-  rateLimited,
-  validation,
-  internal,
-  httpStatus,
   ErrorCode,
+  badRequest,
+  conflict,
+  forbidden,
+  httpStatus,
+  internal,
+  notFound,
+  rateLimited,
+  unauthorized,
+  validation,
 } from "../../src/core/errors/app-error.js";
 
 describe("AppError", () => {

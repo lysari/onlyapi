@@ -26,3 +26,26 @@ export { CircuitState } from "./circuit-breaker.js";
 export type { RetryPolicy, RetryOptions } from "./retry.js";
 export type { AlertSink, AlertPayload } from "./alert-sink.js";
 export { AlertLevel } from "./alert-sink.js";
+export type {
+  VerificationToken,
+  VerificationTokenRepository,
+} from "./verification-token.js";
+export { VerificationTokenType } from "./verification-token.js";
+export type {
+  RefreshTokenFamily,
+  RefreshTokenStore,
+} from "./refresh-token-store.js";
+export type { ApiKey, ApiKeyRepository } from "./api-key.js";
+export type { PasswordHistory, PasswordHistoryEntry } from "./password-history.js";
+export type { TotpService } from "./totp-service.js";
+export type {
+  OAuthProvider,
+  OAuthUserInfo,
+  OAuthAccount,
+  OAuthAccountRepository,
+} from "./oauth.js";
+export type {
+  PasswordPolicy,
+  PasswordPolicyConfig,
+  PasswordPolicyResult,
+} from "./password-policy.js";

@@ -46,6 +46,10 @@ export const createInMemoryUserRepository = (): UserRepository => {
         email: data.email,
         passwordHash: data.passwordHash,
         role: data.role,
+        emailVerified: false,
+        mfaEnabled: false,
+        mfaSecret: null,
+        passwordChangedAt: null,
         createdAt: now,
         updatedAt: now,
       };
@@ -54,6 +58,7 @@ export const createInMemoryUserRepository = (): UserRepository => {
       return ok(user);
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: update handles many optional fields
     async update(id: UserId, data: UpdateUserData): Promise<Result<User, AppError>> {
       const existing = store.get(id);
       if (!existing) return err(notFound("User"));
@@ -63,6 +68,16 @@ export const createInMemoryUserRepository = (): UserRepository => {
         ...(data.email !== undefined ? { email: data.email } : {}),
         ...(data.passwordHash !== undefined ? { passwordHash: data.passwordHash } : {}),
         ...(data.role !== undefined ? { role: data.role } : {}),
+        ...(data.emailVerified !== undefined ? { emailVerified: data.emailVerified } : {}),
+        ...(data.mfaEnabled !== undefined ? { mfaEnabled: data.mfaEnabled } : {}),
+        ...(data.mfaSecret !== undefined ? { mfaSecret: data.mfaSecret } : {}),
+        ...(data.passwordChangedAt !== undefined
+          ? {
+              passwordChangedAt: data.passwordChangedAt as
+                | import("../../core/types/brand.js").Timestamp
+                | null,
+            }
+          : {}),
         updatedAt: brand<number, "Timestamp">(Date.now()),
       };
 

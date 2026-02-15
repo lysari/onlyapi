@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
 let server: ReturnType<typeof Bun.serve>;
 const BASE = "http://localhost:3199";
@@ -21,20 +21,50 @@ beforeAll(async () => {
   const { Database } = await import("bun:sqlite");
   const { loadConfig } = await import("../../src/infrastructure/config/config.js");
   const { createLogger } = await import("../../src/infrastructure/logging/logger.js");
-  const { createPasswordHasher } = await import("../../src/infrastructure/security/password-hasher.js");
+  const { createPasswordHasher } = await import(
+    "../../src/infrastructure/security/password-hasher.js"
+  );
   const { createTokenService } = await import("../../src/infrastructure/security/token-service.js");
-  const { createInMemoryTokenBlacklist } = await import("../../src/infrastructure/security/token-blacklist.js");
-  const { createInMemoryAccountLockout } = await import("../../src/infrastructure/security/account-lockout.js");
-  const { createSqliteUserRepository } = await import("../../src/infrastructure/database/sqlite-user.repository.js");
-  const { createSqliteAuditLog } = await import("../../src/infrastructure/database/sqlite-audit-log.js");
+  const { createInMemoryTokenBlacklist } = await import(
+    "../../src/infrastructure/security/token-blacklist.js"
+  );
+  const { createInMemoryAccountLockout } = await import(
+    "../../src/infrastructure/security/account-lockout.js"
+  );
+  const { createSqliteUserRepository } = await import(
+    "../../src/infrastructure/database/sqlite-user.repository.js"
+  );
+  const { createSqliteAuditLog } = await import(
+    "../../src/infrastructure/database/sqlite-audit-log.js"
+  );
+  const { createSqliteVerificationTokenRepo } = await import(
+    "../../src/infrastructure/database/sqlite-verification-tokens.js"
+  );
+  const { createSqliteRefreshTokenStore } = await import(
+    "../../src/infrastructure/database/sqlite-refresh-token-store.js"
+  );
+  const { createSqliteApiKeyRepository } = await import(
+    "../../src/infrastructure/database/sqlite-api-keys.js"
+  );
+  const { createSqlitePasswordHistory } = await import(
+    "../../src/infrastructure/database/sqlite-password-history.js"
+  );
+  const { createSqliteOAuthAccountRepo } = await import(
+    "../../src/infrastructure/database/sqlite-oauth-accounts.js"
+  );
   const { migrateUp } = await import("../../src/infrastructure/database/migrations/runner.js");
   const { createAuthService } = await import("../../src/application/services/auth.service.js");
   const { createUserService } = await import("../../src/application/services/user.service.js");
   const { createHealthService } = await import("../../src/application/services/health.service.js");
   const { createAdminService } = await import("../../src/application/services/admin.service.js");
+  const { createApiKeyService } = await import("../../src/application/services/api-key.service.js");
   const { createRouter } = await import("../../src/presentation/routes/router.js");
   const { createServer } = await import("../../src/presentation/server.js");
   const { createMetricsCollector } = await import("../../src/infrastructure/metrics/prometheus.js");
+  const { createTotpService } = await import("../../src/infrastructure/security/totp-service.js");
+  const { createPasswordPolicy } = await import(
+    "../../src/infrastructure/security/password-policy.js"
+  );
 
   const config = loadConfig();
   const logger = createLogger(config.log.level);
@@ -54,14 +84,57 @@ beforeAll(async () => {
     lockoutDurationMs: 5000,
   });
 
-  const authService = createAuthService({ userRepo, passwordHasher, tokenService, tokenBlacklist, accountLockout, logger });
+  // v1.4 auth platform deps
+  const verificationTokens = createSqliteVerificationTokenRepo(db);
+  const refreshTokenStore = createSqliteRefreshTokenStore(db);
+  const apiKeyRepo = createSqliteApiKeyRepository(db);
+  const passwordHistory = createSqlitePasswordHistory(db);
+  const oauthAccounts = createSqliteOAuthAccountRepo(db);
+  const totpService = createTotpService();
+  const passwordPolicy = createPasswordPolicy({
+    minLength: 8,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireDigit: true,
+    requireSpecial: false,
+    historyCount: 5,
+    maxAgeDays: 0,
+  });
+  const oauthProviders = new Map();
+
+  const authService = createAuthService({
+    userRepo,
+    passwordHasher,
+    tokenService,
+    tokenBlacklist,
+    accountLockout,
+    verificationTokens,
+    refreshTokenStore,
+    passwordHistory,
+    passwordPolicy,
+    totpService,
+    oauthProviders,
+    oauthAccounts,
+    logger,
+  });
   const userService = createUserService({ userRepo, passwordHasher, logger });
   const healthService = createHealthService({ logger, version: "test" });
   const auditLog = createSqliteAuditLog(db);
   const adminService = createAdminService({ userRepo, auditLog, logger });
+  const apiKeyService = createApiKeyService({ apiKeyRepo, logger });
   const metricsCollector = createMetricsCollector();
 
-  const router = createRouter({ authService, userService, healthService, adminService, tokenService, metricsCollector, logger });
+  const router = createRouter({
+    authService,
+    userService,
+    healthService,
+    adminService,
+    apiKeyService,
+    tokenService,
+    metricsCollector,
+    oauthProviders,
+    logger,
+  });
   const srv = createServer({ config, logger, router, metrics: metricsCollector });
   server = srv.start();
 });
@@ -436,5 +509,167 @@ describe("Integration: OpenTelemetry traces", () => {
     const traceId1 = tp1.split("-")[1];
     const traceId2 = tp2.split("-")[1];
     expect(traceId1).not.toBe(traceId2);
+  });
+});
+
+// ─── v1.4 Auth Platform Integration Tests ──────────────────────────────
+
+describe("Integration: Email verification flow", () => {
+  it("POST /api/v1/auth/verify-email rejects invalid token", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "invalid-token-here" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/v1/auth/forgot-password returns 200 for any email (non-enumerable)", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "nonexistent@test.com" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("POST /api/v1/auth/reset-password rejects invalid token", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: "bad-token", password: "NewPass123!" }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Integration: MFA endpoints", () => {
+  let mfaAccessToken = "";
+
+  it("requires authentication for MFA setup", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/mfa/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/v1/auth/mfa/setup returns secret and URI", async () => {
+    // Register a user for MFA
+    const regRes = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "mfa@test.com", password: "MfaTest123!" }),
+    });
+    expect(regRes.status).toBe(201);
+    const regBody = (await regRes.json()) as { data: { accessToken: string } };
+    mfaAccessToken = regBody.data.accessToken;
+
+    const res = await fetch(`${BASE}/api/v1/auth/mfa/setup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${mfaAccessToken}`,
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { secret: string; uri: string } };
+    expect(body.data.secret).toBeString();
+    expect(body.data.uri).toStartWith("otpauth://totp/");
+  });
+
+  it("POST /api/v1/auth/mfa/enable rejects invalid code", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/mfa/enable`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${mfaAccessToken}`,
+      },
+      body: JSON.stringify({ code: "000000", secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP" }),
+    });
+    // Should fail — wrong code → 401 Unauthorized
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Integration: API Key endpoints", () => {
+  let apiKeyToken = "";
+  let createdKeyId = "";
+
+  it("creates a user for API key tests", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "apikey@test.com", password: "ApiKey123!" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { accessToken: string } };
+    apiKeyToken = body.data.accessToken;
+  });
+
+  it("POST /api/v1/api-keys creates an API key", async () => {
+    const res = await fetch(`${BASE}/api/v1/api-keys`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKeyToken}`,
+      },
+      body: JSON.stringify({ name: "test-key", scopes: ["read"] }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      data: { key: { id: string }; rawKey: string };
+    };
+    expect(body.data.rawKey).toStartWith("oapi_");
+    createdKeyId = body.data.key.id;
+  });
+
+  it("GET /api/v1/api-keys lists API keys", async () => {
+    const res = await fetch(`${BASE}/api/v1/api-keys`, {
+      headers: { Authorization: `Bearer ${apiKeyToken}` },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { keys: Array<{ id: string; name: string }> } };
+    expect(body.data.keys.length).toBeGreaterThanOrEqual(1);
+    expect(body.data.keys.some((k) => k.name === "test-key")).toBe(true);
+  });
+
+  it("DELETE /api/v1/api-keys/:id revokes a key", async () => {
+    const res = await fetch(`${BASE}/api/v1/api-keys/${createdKeyId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${apiKeyToken}` },
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("GET /api/v1/api-keys shows key is gone after revoke", async () => {
+    const res = await fetch(`${BASE}/api/v1/api-keys`, {
+      headers: { Authorization: `Bearer ${apiKeyToken}` },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { keys: Array<{ id: string }> } };
+    expect(body.data.keys.some((k) => k.id === createdKeyId)).toBe(false);
+  });
+});
+
+describe("Integration: Password policy enforcement", () => {
+  it("rejects weak password on registration", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "weak@test.com", password: "weak" }),
+    });
+    // Should fail at DTO validation (min 6) or at policy validation
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("rejects password without required complexity", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "nodigit@test.com", password: "NoDigitsHere" }),
+    });
+    // Policy requires digits
+    expect(res.status).toBe(400);
   });
 });

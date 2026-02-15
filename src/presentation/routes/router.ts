@@ -1,15 +1,19 @@
 import type { AdminService } from "../../application/services/admin.service.js";
+import type { ApiKeyService } from "../../application/services/api-key.service.js";
 import type { AuthService } from "../../application/services/auth.service.js";
 import type { HealthService } from "../../application/services/health.service.js";
 import type { UserService } from "../../application/services/user.service.js";
 import type { Logger } from "../../core/ports/logger.js";
 import type { MetricsCollector } from "../../core/ports/metrics.js";
+import type { OAuthProvider } from "../../core/ports/oauth.js";
 import type { TokenService } from "../../core/ports/token-service.js";
 import type { RequestContext } from "../context.js";
 import { adminHandlers } from "../handlers/admin.handler.js";
+import { apiKeyHandlers } from "../handlers/api-key.handler.js";
 import { authHandlers } from "../handlers/auth.handler.js";
 import { healthHandler } from "../handlers/health.handler.js";
 import { metricsHandler } from "../handlers/metrics.handler.js";
+import { oauthHandlers } from "../handlers/oauth.handler.js";
 import { openApiHandler } from "../handlers/openapi.handler.js";
 import { userHandlers } from "../handlers/user.handler.js";
 
@@ -25,13 +29,19 @@ interface RouterDeps {
   readonly userService: UserService;
   readonly healthService: HealthService;
   readonly adminService: AdminService;
+  readonly apiKeyService: ApiKeyService;
   readonly tokenService: TokenService;
   readonly metricsCollector: MetricsCollector;
+  readonly oauthProviders: ReadonlyMap<string, OAuthProvider>;
   readonly logger: Logger;
 }
 
 /** Admin route prefix for parametric matching */
 const ADMIN_PREFIX = "/api/v1/admin/users/";
+/** API key route prefix for parametric matching */
+const API_KEY_PREFIX = "/api/v1/api-keys/";
+/** OAuth route prefix */
+const OAUTH_PREFIX = "/api/v1/auth/oauth/";
 
 export const createRouter = (deps: RouterDeps) => {
   const { logger } = deps;
@@ -50,6 +60,16 @@ export const createRouter = (deps: RouterDeps) => {
     deps.adminService,
     deps.tokenService,
     logger.child({ layer: "handler", handler: "admin" }),
+  );
+  const apiKeys = apiKeyHandlers(
+    deps.apiKeyService,
+    deps.tokenService,
+    logger.child({ layer: "handler", handler: "api-key" }),
+  );
+  const oauth = oauthHandlers(
+    deps.authService,
+    deps.oauthProviders,
+    logger.child({ layer: "handler", handler: "oauth" }),
   );
   const docs = openApiHandler();
   const metrics = metricsHandler(deps.metricsCollector);
@@ -76,10 +96,26 @@ export const createRouter = (deps: RouterDeps) => {
     ["POST /api/v1/auth/refresh", auth.refresh],
     ["POST /api/v1/auth/logout", auth.logout],
 
+    // Auth — v1.4 email verification & password reset
+    ["POST /api/v1/auth/verify-email", auth.verifyEmail],
+    ["POST /api/v1/auth/resend-verification", auth.resendVerification],
+    ["POST /api/v1/auth/forgot-password", auth.forgotPassword],
+    ["POST /api/v1/auth/reset-password", auth.resetPassword],
+
+    // Auth — v1.4 MFA/2FA
+    ["POST /api/v1/auth/mfa/setup", auth.mfaSetup],
+    ["POST /api/v1/auth/mfa/enable", auth.mfaEnable],
+    ["POST /api/v1/auth/mfa/disable", auth.mfaDisable],
+    ["POST /api/v1/auth/mfa/verify", auth.mfaVerify],
+
     // Users (authenticated)
     ["GET /api/v1/users/me", users.getMe],
     ["PATCH /api/v1/users/me", users.updateMe],
     ["DELETE /api/v1/users/me", users.deleteMe],
+
+    // API Keys — v1.4
+    ["POST /api/v1/api-keys", apiKeys.create],
+    ["GET /api/v1/api-keys", apiKeys.list],
 
     // Admin — list endpoint (no userId param)
     ["GET /api/v1/admin/users", admin.listUsers],
@@ -129,15 +165,63 @@ export const createRouter = (deps: RouterDeps) => {
     return null;
   };
 
+  /**
+   * Match parametric API key routes: DELETE /api/v1/api-keys/:id
+   */
+  const matchApiKey = (
+    method: string,
+    path: string,
+  ): ((req: Request, ctx: RequestContext) => Promise<Response>) | null => {
+    if (method !== "DELETE" || !path.startsWith(API_KEY_PREFIX)) return null;
+    const keyId = path.substring(API_KEY_PREFIX.length);
+    if (!keyId || keyId.includes("/")) return null;
+    return (req, ctx) => apiKeys.revoke(req, ctx, keyId);
+  };
+
+  /**
+   * Match parametric OAuth routes:
+   * GET /api/v1/auth/oauth/:provider
+   * POST /api/v1/auth/oauth/:provider/callback
+   */
+  const matchOAuth = (
+    method: string,
+    path: string,
+  ): ((req: Request, ctx: RequestContext) => Promise<Response>) | null => {
+    if (!path.startsWith(OAUTH_PREFIX)) return null;
+    const rest = path.substring(OAUTH_PREFIX.length);
+    const slashIdx = rest.indexOf("/");
+
+    if (slashIdx === -1) {
+      // /api/v1/auth/oauth/:provider
+      if (method === "GET") return (req, ctx) => oauth.authorize(req, ctx, rest);
+      return null;
+    }
+
+    const provider = rest.substring(0, slashIdx);
+    const action = rest.substring(slashIdx + 1);
+
+    if (method === "POST" && action === "callback") {
+      return (req, ctx) => oauth.callback(req, ctx, provider);
+    }
+
+    return null;
+  };
+
   return {
     handle(req: Request, ctx: RequestContext, path: string): Promise<Response> {
       // 1. Try static routes first (O(1))
       const handler = routes.get(`${req.method} ${path}`);
       if (handler) return handler(req, ctx);
 
-      // 2. Try parametric admin routes
+      // 2. Try parametric routes
       const adminHandler = matchAdmin(req.method, path);
       if (adminHandler) return adminHandler(req, ctx);
+
+      const apiKeyHandler = matchApiKey(req.method, path);
+      if (apiKeyHandler) return apiKeyHandler(req, ctx);
+
+      const oauthHandler = matchOAuth(req.method, path);
+      if (oauthHandler) return oauthHandler(req, ctx);
 
       return Promise.resolve(notFound404(req.method, path));
     },

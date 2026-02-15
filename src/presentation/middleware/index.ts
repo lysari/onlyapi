@@ -8,3 +8,4 @@ export {
 } from "./rate-limit.js";
 export { authenticate, authorise } from "./auth.js";
 export { validateBody } from "./validate.js";
+export { authenticateApiKey } from "./api-key.js";

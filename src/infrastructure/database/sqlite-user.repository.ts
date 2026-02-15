@@ -24,6 +24,10 @@ interface UserRow {
   email: string;
   password_hash: string;
   role: string;
+  email_verified: number;
+  mfa_secret: string | null;
+  mfa_enabled: number;
+  password_changed_at: number | null;
   failed_login_attempts: number;
   locked_until: number | null;
   created_at: number;
@@ -35,6 +39,11 @@ const rowToUser = (row: UserRow): User => ({
   email: row.email,
   passwordHash: row.password_hash,
   role: row.role as UserRole,
+  emailVerified: row.email_verified === 1,
+  mfaEnabled: row.mfa_enabled === 1,
+  mfaSecret: row.mfa_secret,
+  passwordChangedAt:
+    row.password_changed_at !== null ? brand<number, "Timestamp">(row.password_changed_at) : null,
   createdAt: brand<number, "Timestamp">(row.created_at),
   updatedAt: brand<number, "Timestamp">(row.updated_at),
 });
@@ -45,6 +54,12 @@ const buildUpdateFields = (data: UpdateUserData, now: number): [string, unknown]
   if (data.email !== undefined) fields.push(["email = ?", data.email]);
   if (data.passwordHash !== undefined) fields.push(["password_hash = ?", data.passwordHash]);
   if (data.role !== undefined) fields.push(["role = ?", data.role]);
+  if (data.emailVerified !== undefined)
+    fields.push(["email_verified = ?", data.emailVerified ? 1 : 0]);
+  if (data.mfaEnabled !== undefined) fields.push(["mfa_enabled = ?", data.mfaEnabled ? 1 : 0]);
+  if (data.mfaSecret !== undefined) fields.push(["mfa_secret = ?", data.mfaSecret]);
+  if (data.passwordChangedAt !== undefined)
+    fields.push(["password_changed_at = ?", data.passwordChangedAt]);
   fields.push(["updated_at = ?", now]);
   return fields;
 };
@@ -58,7 +73,7 @@ export const createSqliteUserRepository = (db: Database): UserRepository => {
   const findByIdStmt = db.prepare<UserRow, [string]>("SELECT * FROM users WHERE id = ?");
   const findByEmailStmt = db.prepare<UserRow, [string]>("SELECT * FROM users WHERE email = ?");
   const insertStmt = db.prepare(
-    "INSERT INTO users (id, email, password_hash, role, failed_login_attempts, locked_until, created_at, updated_at) VALUES (?, ?, ?, ?, 0, NULL, ?, ?)",
+    "INSERT INTO users (id, email, password_hash, role, email_verified, mfa_enabled, failed_login_attempts, locked_until, created_at, updated_at) VALUES (?, ?, ?, ?, 0, 0, 0, NULL, ?, ?)",
   );
   const deleteStmt = db.prepare("DELETE FROM users WHERE id = ?");
 
@@ -100,6 +115,10 @@ export const createSqliteUserRepository = (db: Database): UserRepository => {
           email: data.email,
           passwordHash: data.passwordHash,
           role: data.role,
+          emailVerified: false,
+          mfaEnabled: false,
+          mfaSecret: null,
+          passwordChangedAt: null,
           createdAt: brand<number, "Timestamp">(now),
           updatedAt: brand<number, "Timestamp">(now),
         };

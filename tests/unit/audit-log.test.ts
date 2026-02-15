@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { createSqliteAuditLog } from "../../src/infrastructure/database/sqlite-audit-log.js";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { AuditAction } from "../../src/core/ports/audit-log.js";
+import { createSqliteAuditLog } from "../../src/infrastructure/database/sqlite-audit-log.js";
 
 describe("SqliteAuditLog", () => {
   let db: InstanceType<typeof Database>;

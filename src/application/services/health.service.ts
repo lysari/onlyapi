@@ -32,7 +32,6 @@ export const createHealthService = (deps: Deps): HealthService => {
   const circuitBreakers = deps.circuitBreakers ?? [];
 
   return {
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: health check gathers many component statuses
     async check(): Promise<HealthStatus> {
       logger.debug("Running deep health check");
       const start = performance.now();

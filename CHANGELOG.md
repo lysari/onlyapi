@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-16
+
+### Added
+
+- **Email verification** — `POST /api/v1/auth/verify-email` with SHA-256 hashed, time-limited tokens (24h TTL); `VerificationTokenRepository` port + SQLite adapter; supports email-verification and password-reset token types
+- **Password reset** — `POST /api/v1/auth/forgot-password` (non-enumerable, always returns 200) + `POST /api/v1/auth/reset-password` with secure token-based flow (1h TTL); prevents information disclosure about registered emails
+- **Refresh token rotation** — one-time-use refresh tokens with family-based reuse detection; `RefreshTokenStore` port + SQLite adapter; token reuse revokes entire family to mitigate stolen token replay attacks
+- **MFA / 2FA (TOTP)** — RFC 6238 TOTP implementation using `Bun.CryptoHasher` HMAC-SHA1; setup/enable/disable/verify endpoints; Google Authenticator-compatible `otpauth://` URI generation; base32 encoding (zero-dep); time-step window of ±1 for clock drift tolerance
+- **OAuth2 / SSO** — Google and GitHub provider adapters with authorization URL generation and token exchange; `OAuthProvider` port + `OAuthAccountRepository` for provider-account linking; conditional registration based on `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GITHUB_CLIENT_ID` environment variables
+- **API key auth** — `POST /api/v1/api-keys` (create), `GET /api/v1/api-keys` (list), `DELETE /api/v1/api-keys/:id` (revoke); `oapi_` prefixed keys with SHA-256 hashed storage; `X-API-Key` header authentication; configurable scopes and expiry; `ApiKeyRepository` port + SQLite adapter
+- **Password policy** — configurable complexity rules (min length, uppercase, lowercase, digit, special character); password history checking to prevent reuse of last N passwords; password expiry detection; `PasswordPolicy` service + `PasswordHistory` port + SQLite adapter
+- Migration 004: `auth_platform` — creates `verification_tokens`, `refresh_tokens`, `api_keys`, `password_history`, `oauth_accounts` tables with appropriate indexes
+- `TotpService` port + infrastructure adapter (RFC 6238, HMAC-SHA1 via Bun.CryptoHasher, base32 codec)
+- 9 new DI container tokens: `VerificationTokenRepository`, `RefreshTokenStore`, `ApiKeyRepository`, `PasswordHistory`, `PasswordPolicy`, `TotpService`, `OAuthProviders`, `OAuthAccountRepository`, `ApiKeyService`
+- Password policy config section: `PASSWORD_MIN_LENGTH`, `PASSWORD_REQUIRE_UPPERCASE`, `PASSWORD_REQUIRE_LOWERCASE`, `PASSWORD_REQUIRE_DIGIT`, `PASSWORD_REQUIRE_SPECIAL`, `PASSWORD_HISTORY_COUNT`, `PASSWORD_MAX_AGE_DAYS`
+- OAuth config section: `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET`, `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET`
+- 68 new tests across 7 new test files + expanded integration tests (178 → 246 total, 28 files, 589 expect() calls)
+
+### Changed
+
+- `AuthService` now accepts 13 dependencies (was 6): adds verification tokens, refresh token store, TOTP service, OAuth providers, OAuth accounts, API key repository, password history, password policy
+- `User` entity extended with `emailVerified`, `mfaEnabled`, `mfaSecret`, `passwordChangedAt` fields
+- `InMemoryUserRepository` updated to initialize and handle all new user fields
+- Router now supports OAuth, MFA, API key, and email verification route groups
+- Startup banner displays v1.4.0; pruning interval covers verification tokens and refresh tokens in addition to blacklisted JWT tokens
+- Version bumped to 1.4.0
+
+---
+
 ## [1.3.0] - 2026-02-15
 
 ### Added

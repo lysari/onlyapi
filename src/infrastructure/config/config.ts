@@ -53,6 +53,35 @@ const configSchema = z.object({
     resetTimeoutMs: z.coerce.number().int().positive().default(30_000),
     halfOpenSuccessThreshold: z.coerce.number().int().positive().default(2),
   }),
+
+  passwordPolicy: z.object({
+    minLength: z.coerce.number().int().positive().default(8),
+    requireUppercase: z
+      .enum(["true", "false"])
+      .transform((v) => v === "true")
+      .default("true"),
+    requireLowercase: z
+      .enum(["true", "false"])
+      .transform((v) => v === "true")
+      .default("true"),
+    requireDigit: z
+      .enum(["true", "false"])
+      .transform((v) => v === "true")
+      .default("true"),
+    requireSpecial: z
+      .enum(["true", "false"])
+      .transform((v) => v === "true")
+      .default("false"),
+    historyCount: z.coerce.number().int().min(0).default(5),
+    maxAgeDays: z.coerce.number().int().min(0).default(0),
+  }),
+
+  oauth: z.object({
+    googleClientId: z.string().optional(),
+    googleClientSecret: z.string().optional(),
+    githubClientId: z.string().optional(),
+    githubClientSecret: z.string().optional(),
+  }),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -96,6 +125,21 @@ export const loadConfig = (): AppConfig => {
       failureThreshold: Bun.env["CB_FAILURE_THRESHOLD"],
       resetTimeoutMs: Bun.env["CB_RESET_TIMEOUT_MS"],
       halfOpenSuccessThreshold: Bun.env["CB_HALF_OPEN_SUCCESS_THRESHOLD"],
+    },
+    passwordPolicy: {
+      minLength: Bun.env["PASSWORD_MIN_LENGTH"],
+      requireUppercase: Bun.env["PASSWORD_REQUIRE_UPPERCASE"],
+      requireLowercase: Bun.env["PASSWORD_REQUIRE_LOWERCASE"],
+      requireDigit: Bun.env["PASSWORD_REQUIRE_DIGIT"],
+      requireSpecial: Bun.env["PASSWORD_REQUIRE_SPECIAL"],
+      historyCount: Bun.env["PASSWORD_HISTORY_COUNT"],
+      maxAgeDays: Bun.env["PASSWORD_MAX_AGE_DAYS"],
+    },
+    oauth: {
+      googleClientId: Bun.env["OAUTH_GOOGLE_CLIENT_ID"],
+      googleClientSecret: Bun.env["OAUTH_GOOGLE_CLIENT_SECRET"],
+      githubClientId: Bun.env["OAUTH_GITHUB_CLIENT_ID"],
+      githubClientSecret: Bun.env["OAUTH_GITHUB_CLIENT_SECRET"],
     },
   });
 

@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
-import { createTokenService } from "../../src/infrastructure/security/token-service.js";
-import { brand, type UserId } from "../../src/core/types/brand.js";
+import { describe, expect, it } from "bun:test";
 import type { UserRole } from "../../src/core/entities/user.entity.js";
+import { type UserId, brand } from "../../src/core/types/brand.js";
+import { createTokenService } from "../../src/infrastructure/security/token-service.js";
 
 describe("TokenService (JWT)", () => {
   const service = createTokenService({

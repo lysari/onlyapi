@@ -45,4 +45,13 @@ export const Tokens = {
   Database: Symbol.for("Database"),
   MetricsCollector: Symbol.for("MetricsCollector"),
   AlertSink: Symbol.for("AlertSink"),
+  VerificationTokenRepository: Symbol.for("VerificationTokenRepository"),
+  RefreshTokenStore: Symbol.for("RefreshTokenStore"),
+  ApiKeyRepository: Symbol.for("ApiKeyRepository"),
+  PasswordHistory: Symbol.for("PasswordHistory"),
+  PasswordPolicy: Symbol.for("PasswordPolicy"),
+  TotpService: Symbol.for("TotpService"),
+  OAuthProviders: Symbol.for("OAuthProviders"),
+  OAuthAccountRepository: Symbol.for("OAuthAccountRepository"),
+  ApiKeyService: Symbol.for("ApiKeyService"),
 } as const;

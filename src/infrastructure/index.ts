@@ -5,6 +5,8 @@ export {
   createTokenService,
   createInMemoryTokenBlacklist,
   createInMemoryAccountLockout,
+  createTotpService,
+  createPasswordPolicy,
 } from "./security/index.js";
 export {
   createInMemoryUserRepository,
@@ -12,6 +14,11 @@ export {
   createSqliteTokenBlacklist,
   createSqliteAccountLockout,
   createSqliteAuditLog,
+  createSqliteVerificationTokenRepo,
+  createSqliteRefreshTokenStore,
+  createSqliteApiKeyRepository,
+  createSqlitePasswordHistory,
+  createSqliteOAuthAccountRepo,
   migrateUp,
   migrateDown,
 } from "./database/index.js";
@@ -27,3 +34,4 @@ export {
   formatTraceparent,
   type TraceContext,
 } from "./tracing/index.js";
+export { createGoogleOAuthProvider, createGitHubOAuthProvider } from "./oauth/index.js";

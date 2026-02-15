@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { createSqliteUserRepository } from "../../src/infrastructure/database/sqlite-user.repository.js";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { brand } from "../../src/core/types/brand.js";
+import { createSqliteUserRepository } from "../../src/infrastructure/database/sqlite-user.repository.js";
 
 let db: Database;
 let repo: ReturnType<typeof createSqliteUserRepository>;
@@ -14,6 +14,10 @@ beforeEach(() => {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user',
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      mfa_enabled INTEGER NOT NULL DEFAULT 0,
+      mfa_secret TEXT,
+      password_changed_at INTEGER,
       failed_login_attempts INTEGER NOT NULL DEFAULT 0,
       locked_until INTEGER,
       created_at INTEGER NOT NULL,
@@ -62,14 +66,22 @@ describe("SQLite UserRepository", () => {
 
   it("rejects duplicate email", async () => {
     await repo.create({ email: "dup@example.com", passwordHash: "h1", role: "user" });
-    const result = await repo.create({ email: "dup@example.com", passwordHash: "h2", role: "user" });
+    const result = await repo.create({
+      email: "dup@example.com",
+      passwordHash: "h2",
+      role: "user",
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe("CONFLICT");
   });
 
   it("updates a user", async () => {
-    const created = await repo.create({ email: "upd@example.com", passwordHash: "h", role: "user" });
+    const created = await repo.create({
+      email: "upd@example.com",
+      passwordHash: "h",
+      role: "user",
+    });
     if (!created.ok) return;
 
     const updated = await repo.update(created.value.id, { email: "new@example.com" });
@@ -79,7 +91,11 @@ describe("SQLite UserRepository", () => {
   });
 
   it("deletes a user", async () => {
-    const created = await repo.create({ email: "del@example.com", passwordHash: "h", role: "user" });
+    const created = await repo.create({
+      email: "del@example.com",
+      passwordHash: "h",
+      role: "user",
+    });
     if (!created.ok) return;
 
     const deleted = await repo.delete(created.value.id);

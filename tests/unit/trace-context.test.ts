@@ -1,9 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
-  parseTraceparent,
   createTraceContext,
-  resolveTraceContext,
   formatTraceparent,
+  parseTraceparent,
+  resolveTraceContext,
 } from "../../src/infrastructure/tracing/trace-context.js";
 
 describe("W3C Trace Context", () => {
@@ -55,7 +55,9 @@ describe("W3C Trace Context", () => {
     it("returns undefined for invalid format", () => {
       expect(parseTraceparent("invalid")).toBeUndefined();
       expect(parseTraceparent("00-short-id-01")).toBeUndefined();
-      expect(parseTraceparent("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")).toBeUndefined();
+      expect(
+        parseTraceparent("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
+      ).toBeUndefined();
     });
 
     it("rejects all-zero trace ID", () => {

@@ -2,23 +2,34 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createAdminService } from "./application/services/admin.service.js";
+import { createApiKeyService } from "./application/services/api-key.service.js";
 import { createAuthService } from "./application/services/auth.service.js";
 import { createHealthService } from "./application/services/health.service.js";
 import { createUserService } from "./application/services/user.service.js";
 import { AlertLevel } from "./core/ports/alert-sink.js";
 import { CircuitState } from "./core/ports/circuit-breaker.js";
+import type { OAuthProvider } from "./core/ports/oauth.js";
 import { createNoopAlertSink, createWebhookAlertSink } from "./infrastructure/alerting/webhook.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { migrateUp } from "./infrastructure/database/migrations/runner.js";
 import { createSqliteAccountLockout } from "./infrastructure/database/sqlite-account-lockout.js";
+import { createSqliteApiKeyRepository } from "./infrastructure/database/sqlite-api-keys.js";
 import { createSqliteAuditLog } from "./infrastructure/database/sqlite-audit-log.js";
+import { createSqliteOAuthAccountRepo } from "./infrastructure/database/sqlite-oauth-accounts.js";
+import { createSqlitePasswordHistory } from "./infrastructure/database/sqlite-password-history.js";
+import { createSqliteRefreshTokenStore } from "./infrastructure/database/sqlite-refresh-token-store.js";
 import { createSqliteTokenBlacklist } from "./infrastructure/database/sqlite-token-blacklist.js";
 import { createSqliteUserRepository } from "./infrastructure/database/sqlite-user.repository.js";
+import { createSqliteVerificationTokenRepo } from "./infrastructure/database/sqlite-verification-tokens.js";
 import { createLogger } from "./infrastructure/logging/logger.js";
 import { createMetricsCollector } from "./infrastructure/metrics/prometheus.js";
+import { createGitHubOAuthProvider } from "./infrastructure/oauth/github.js";
+import { createGoogleOAuthProvider } from "./infrastructure/oauth/google.js";
 import { createCircuitBreaker } from "./infrastructure/resilience/circuit-breaker.js";
 import { createPasswordHasher } from "./infrastructure/security/password-hasher.js";
+import { createPasswordPolicy } from "./infrastructure/security/password-policy.js";
 import { createTokenService } from "./infrastructure/security/token-service.js";
+import { createTotpService } from "./infrastructure/security/totp-service.js";
 import { createRouter } from "./presentation/routes/router.js";
 import { createServer } from "./presentation/server.js";
 import { printShutdown, printStartupBanner } from "./shared/cli.js";
@@ -63,6 +74,40 @@ const bootstrap = async () => {
   });
   const auditLog = createSqliteAuditLog(db);
 
+  // 5b. v1.4 — Auth platform repositories
+  const verificationTokens = createSqliteVerificationTokenRepo(db);
+  const refreshTokenStore = createSqliteRefreshTokenStore(db);
+  const apiKeyRepo = createSqliteApiKeyRepository(db);
+  const passwordHistory = createSqlitePasswordHistory(db);
+  const oauthAccounts = createSqliteOAuthAccountRepo(db);
+
+  // 5c. v1.4 — Security services
+  const totpService = createTotpService();
+  const passwordPolicy = createPasswordPolicy(config.passwordPolicy);
+
+  // 5d. v1.4 — OAuth providers (only registered when configured)
+  const oauthProviders = new Map<string, OAuthProvider>();
+  if (config.oauth.googleClientId && config.oauth.googleClientSecret) {
+    oauthProviders.set(
+      "google",
+      createGoogleOAuthProvider({
+        clientId: config.oauth.googleClientId,
+        clientSecret: config.oauth.googleClientSecret,
+      }),
+    );
+    logger.info("OAuth provider registered: google");
+  }
+  if (config.oauth.githubClientId && config.oauth.githubClientSecret) {
+    oauthProviders.set(
+      "github",
+      createGitHubOAuthProvider({
+        clientId: config.oauth.githubClientId,
+        clientSecret: config.oauth.githubClientSecret,
+      }),
+    );
+    logger.info("OAuth provider registered: github");
+  }
+
   // 6. Register in DI container
   Container.register(Tokens.Logger, logger);
   Container.register(Tokens.Config, config);
@@ -73,6 +118,14 @@ const bootstrap = async () => {
   Container.register(Tokens.AccountLockout, accountLockout);
   Container.register(Tokens.UserRepository, userRepo);
   Container.register(Tokens.AuditLog, auditLog);
+  Container.register(Tokens.VerificationTokenRepository, verificationTokens);
+  Container.register(Tokens.RefreshTokenStore, refreshTokenStore);
+  Container.register(Tokens.ApiKeyRepository, apiKeyRepo);
+  Container.register(Tokens.PasswordHistory, passwordHistory);
+  Container.register(Tokens.PasswordPolicy, passwordPolicy);
+  Container.register(Tokens.TotpService, totpService);
+  Container.register(Tokens.OAuthProviders, oauthProviders);
+  Container.register(Tokens.OAuthAccountRepository, oauthAccounts);
 
   // 6b. Observability — metrics collector
   const metricsCollector = createMetricsCollector();
@@ -137,6 +190,13 @@ const bootstrap = async () => {
     tokenService,
     tokenBlacklist,
     accountLockout,
+    verificationTokens,
+    refreshTokenStore,
+    passwordHistory,
+    passwordPolicy,
+    totpService,
+    oauthProviders,
+    oauthAccounts,
     logger: logger.child({ service: "auth" }),
   });
 
@@ -148,7 +208,7 @@ const bootstrap = async () => {
 
   const healthService = createHealthService({
     logger: logger.child({ service: "health" }),
-    version: "1.3.0",
+    version: "1.4.0",
     circuitBreakers: [dbCircuitBreaker],
   });
 
@@ -158,10 +218,16 @@ const bootstrap = async () => {
     logger: logger.child({ service: "admin" }),
   });
 
+  const apiKeyService = createApiKeyService({
+    apiKeyRepo,
+    logger: logger.child({ service: "api-key" }),
+  });
+
   Container.register(Tokens.AuthService, authService);
   Container.register(Tokens.UserService, userService);
   Container.register(Tokens.HealthService, healthService);
   Container.register(Tokens.AdminService, adminService);
+  Container.register(Tokens.ApiKeyService, apiKeyService);
 
   // 8. Presentation
   const router = createRouter({
@@ -169,8 +235,10 @@ const bootstrap = async () => {
     userService,
     healthService,
     adminService,
+    apiKeyService,
     tokenService,
     metricsCollector,
+    oauthProviders,
     logger,
   });
   const srv = createServer({ config, logger, router, metrics: metricsCollector });
@@ -187,12 +255,22 @@ const bootstrap = async () => {
     });
   }
 
-  // 11. Periodic token blacklist pruning (every 10 minutes)
+  // 11. Periodic token pruning (every 10 minutes)
   const pruneInterval = setInterval(
     async () => {
-      const result = await tokenBlacklist.prune();
-      if (result.ok && result.value > 0) {
-        logger.debug("Pruned expired blacklisted tokens", { count: result.value });
+      const blacklistResult = await tokenBlacklist.prune();
+      if (blacklistResult.ok && blacklistResult.value > 0) {
+        logger.debug("Pruned expired blacklisted tokens", { count: blacklistResult.value });
+      }
+
+      const verifyResult = await verificationTokens.prune();
+      if (verifyResult.ok && verifyResult.value > 0) {
+        logger.debug("Pruned expired verification tokens", { count: verifyResult.value });
+      }
+
+      const refreshResult = await refreshTokenStore.prune(30 * 24 * 60 * 60 * 1000);
+      if (refreshResult.ok && refreshResult.value > 0) {
+        logger.debug("Pruned revoked refresh token families", { count: refreshResult.value });
       }
     },
     10 * 60 * 1000,

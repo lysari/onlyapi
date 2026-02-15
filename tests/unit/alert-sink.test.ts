@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { AlertLevel } from "../../src/core/ports/alert-sink.js";
 import { createNoopAlertSink } from "../../src/infrastructure/alerting/webhook.js";
 

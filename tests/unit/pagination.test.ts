@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import { encodeCursor, decodeCursor } from "../../src/core/types/pagination.js";
+import { describe, expect, it } from "bun:test";
+import { decodeCursor, encodeCursor } from "../../src/core/types/pagination.js";
 
 describe("Cursor-based pagination", () => {
   it("encodeCursor returns a base64 string", () => {

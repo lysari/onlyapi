@@ -38,7 +38,7 @@
 - **Clean Architecture** — Domain → Application → Infrastructure → Presentation
 - **Strictest TypeScript** — 22+ compiler flags, branded types, `Result<T,E>` monad (no `throw`)
 - **Security-first** — Argon2id (Bun-native), HMAC-SHA256 JWT (Web Crypto API), CORS, rate-limiting, security headers
-- **120 tests** — unit + integration, all passing
+- **246 tests** — unit + integration, all passing
 
 ## Architecture
 
@@ -171,6 +171,18 @@ WORKERS=8 bun run start:cluster
 | `GET` | `/api/v1/users/me` | Bearer | Get current user profile |
 | `PATCH` | `/api/v1/users/me` | Bearer | Update current user |
 | `DELETE` | `/api/v1/users/me` | Bearer | Delete current user |
+| `POST` | `/api/v1/auth/verify-email` | No | Verify email with token |
+| `POST` | `/api/v1/auth/forgot-password` | No | Request password reset email |
+| `POST` | `/api/v1/auth/reset-password` | No | Reset password with token |
+| `POST` | `/api/v1/auth/mfa/setup` | Bearer | Generate TOTP secret + QR URI |
+| `POST` | `/api/v1/auth/mfa/enable` | Bearer | Enable MFA with TOTP code |
+| `POST` | `/api/v1/auth/mfa/disable` | Bearer | Disable MFA with TOTP code |
+| `POST` | `/api/v1/auth/mfa/verify` | Bearer | Verify TOTP code |
+| `GET` | `/api/v1/auth/oauth/:provider` | No | OAuth2 redirect (Google, GitHub) |
+| `GET` | `/api/v1/auth/oauth/:provider/callback` | No | OAuth2 callback |
+| `POST` | `/api/v1/api-keys` | Bearer | Create API key |
+| `GET` | `/api/v1/api-keys` | Bearer | List API keys |
+| `DELETE` | `/api/v1/api-keys/:id` | Bearer | Revoke API key |
 
 ### Example
 
@@ -207,6 +219,17 @@ All configuration is loaded via environment variables and validated with Zod at 
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per window |
 | `LOG_LEVEL` | `debug` | `debug` \| `info` \| `warn` \| `error` \| `fatal` |
 | `WORKERS` | CPU count | Cluster worker count |
+| `PASSWORD_MIN_LENGTH` | `8` | Min password length |
+| `PASSWORD_REQUIRE_UPPERCASE` | `true` | Require uppercase letter |
+| `PASSWORD_REQUIRE_LOWERCASE` | `true` | Require lowercase letter |
+| `PASSWORD_REQUIRE_DIGIT` | `true` | Require digit |
+| `PASSWORD_REQUIRE_SPECIAL` | `true` | Require special character |
+| `PASSWORD_HISTORY_COUNT` | `5` | Previous passwords to block reuse |
+| `PASSWORD_MAX_AGE_DAYS` | `0` | Password expiry (0 = never) |
+| `OAUTH_GOOGLE_CLIENT_ID` | — | Google OAuth2 client ID |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | — | Google OAuth2 client secret |
+| `OAUTH_GITHUB_CLIENT_ID` | — | GitHub OAuth2 client ID |
+| `OAUTH_GITHUB_CLIENT_SECRET` | — | GitHub OAuth2 client secret |
 
 ## Scripts
 
@@ -256,7 +279,7 @@ Benchmarked on MacBook Pro (Intel i7-9750H, 12 threads) with [bombardier](https:
 ## Testing
 
 ```bash
-# Run all tests (120 tests across 18 files)
+# Run all tests (246 tests across 28 files)
 bun test
 
 # Watch mode
@@ -267,8 +290,8 @@ bun test tests/unit/result.test.ts
 ```
 
 Tests cover:
-- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository
-- **Integration**: Full HTTP request lifecycle (health, auth flow, error handling, CORS)
+- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository, TOTP, password policy, API keys, refresh tokens, verification tokens, OAuth accounts, password history, migrations, account lockout
+- **Integration**: Full HTTP request lifecycle (health, auth flow, email verification, MFA, API keys, password policy, error handling, CORS)
 
 ## Roadmap
 
@@ -305,13 +328,13 @@ Tests cover:
 
 ### v1.4 — Auth Platform
 
-- [ ] **Email verification** — `POST /api/v1/auth/verify-email` with time-limited token
-- [ ] **Password reset** — `POST /api/v1/auth/forgot-password` + `POST /api/v1/auth/reset-password`
-- [ ] **Refresh token rotation** — one-time-use refresh tokens with reuse detection
-- [ ] **MFA / 2FA** — TOTP-based (Google Authenticator compatible)
-- [ ] **OAuth2 / SSO** — Google, GitHub provider adapters
-- [ ] **API key auth** — `X-API-Key` header for service-to-service calls
-- [ ] **Password policy** — history, reuse prevention, expiry
+- [x] **Email verification** — `POST /api/v1/auth/verify-email` with time-limited token
+- [x] **Password reset** — `POST /api/v1/auth/forgot-password` + `POST /api/v1/auth/reset-password`
+- [x] **Refresh token rotation** — one-time-use refresh tokens with reuse detection
+- [x] **MFA / 2FA** — TOTP-based (Google Authenticator compatible)
+- [x] **OAuth2 / SSO** — Google, GitHub provider adapters
+- [x] **API key auth** — `X-API-Key` header for service-to-service calls
+- [x] **Password policy** — history, reuse prevention, expiry
 
 ### v1.5 — Real-time & Events
 
@@ -343,10 +366,10 @@ Tests cover:
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
 | Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
-| Testing | ✅ 178 tests (unit + integration) |
+| Testing | ✅ 246 tests (unit + integration) |
 | CI/CD | ✅ GitHub Actions (lint → check → test → build) |
 | Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
-| Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout |
+| Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout, email verification, password reset, MFA/TOTP, OAuth2 (Google + GitHub), API keys, password policy |
 | Containerization | ✅ Dockerfile (distroless), docker-compose |
 | Observability | ✅ Structured logs, Prometheus metrics, OpenTelemetry traces, alerting hooks |
 | API Docs | ✅ OpenAPI 3.1 spec |

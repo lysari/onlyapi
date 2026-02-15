@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import { ok, err, map, flatMap, unwrapOr, tryCatch } from "../../src/core/types/result.js";
+import { describe, expect, it } from "bun:test";
+import { err, flatMap, map, ok, tryCatch, unwrapOr } from "../../src/core/types/result.js";
 
 describe("Result monad", () => {
   it("ok wraps a value", () => {

@@ -28,6 +28,10 @@ export interface UpdateUserData {
   readonly email?: string | undefined;
   readonly passwordHash?: string | undefined;
   readonly role?: UserRole | undefined;
+  readonly emailVerified?: boolean | undefined;
+  readonly mfaEnabled?: boolean | undefined;
+  readonly mfaSecret?: string | null | undefined;
+  readonly passwordChangedAt?: number | undefined;
 }
 
 export interface UserListOptions extends CursorParams {

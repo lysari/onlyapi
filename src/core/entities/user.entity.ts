@@ -8,6 +8,10 @@ export interface User {
   readonly email: string;
   readonly passwordHash: string;
   readonly role: UserRole;
+  readonly emailVerified: boolean;
+  readonly mfaEnabled: boolean;
+  readonly mfaSecret: string | null;
+  readonly passwordChangedAt: Timestamp | null;
   readonly createdAt: Timestamp;
   readonly updatedAt: Timestamp;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createInMemoryTokenBlacklist } from "../../src/infrastructure/security/token-blacklist.js";
 
 describe("InMemory TokenBlacklist", () => {

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "bun:test";
-import { createInMemoryUserRepository } from "../../src/infrastructure/database/in-memory-user.repository.js";
+import { describe, expect, it } from "bun:test";
 import { brand } from "../../src/core/types/brand.js";
+import { createInMemoryUserRepository } from "../../src/infrastructure/database/in-memory-user.repository.js";
 
 describe("InMemoryUserRepository", () => {
   const repo = createInMemoryUserRepository();

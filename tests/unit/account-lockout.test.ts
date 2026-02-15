@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createInMemoryAccountLockout } from "../../src/infrastructure/security/account-lockout.js";
 
 describe("InMemory AccountLockout", () => {
@@ -31,7 +31,7 @@ describe("InMemory AccountLockout", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).not.toBeNull();
-      expect(result.value!).toBeGreaterThan(Date.now());
+      expect(result.value).toBeGreaterThan(Date.now());
     }
   });
 

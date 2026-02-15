@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { createRetryPolicy } from "../../src/infrastructure/resilience/retry.js";
 
 describe("Retry with Backoff", () => {
@@ -124,7 +124,7 @@ describe("Retry with Backoff", () => {
       maxRetries: 5,
       baseDelayMs: 50,
       maxDelayMs: 100, // caps at 100ms
-      jitter: 0,       // no jitter so delay is predictable
+      jitter: 0, // no jitter so delay is predictable
       onRetry: (_attempt, _err, delay) => {
         delays.push(delay);
       },

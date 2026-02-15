@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from "bun:test";
-import { createInMemoryUserRepository } from "../../src/infrastructure/database/in-memory-user.repository.js";
-import { brand } from "../../src/core/types/brand.js";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { createAdminService } from "../../src/application/services/admin.service.js";
-import type { AuditLog, AuditEntry, AuditQueryOptions } from "../../src/core/ports/audit-log.js";
+import type { AuditEntry, AuditLog, AuditQueryOptions } from "../../src/core/ports/audit-log.js";
 import type { Logger } from "../../src/core/ports/logger.js";
-import { ok } from "../../src/core/types/result.js";
+import { brand } from "../../src/core/types/brand.js";
 import type { UserId } from "../../src/core/types/brand.js";
+import { ok } from "../../src/core/types/result.js";
+import { createInMemoryUserRepository } from "../../src/infrastructure/database/in-memory-user.repository.js";
 
 // Minimal no-op logger
 const noop = () => {};
@@ -136,7 +136,12 @@ describe("AdminService", () => {
     if (!listResult.ok) return;
     const userId = listResult.value.items[0]?.id as UserId;
 
-    const result = await adminService.changeRole(userId, { role: "admin" }, "other-admin", "127.0.0.1");
+    const result = await adminService.changeRole(
+      userId,
+      { role: "admin" },
+      "other-admin",
+      "127.0.0.1",
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.role).toBe("admin");
@@ -170,7 +175,12 @@ describe("AdminService", () => {
     if (!listResult.ok) return;
     const userId = listResult.value.items[0]?.id as UserId;
 
-    const result = await adminService.banUser(userId, { reason: "spam" }, "admin-actor", "127.0.0.1");
+    const result = await adminService.banUser(
+      userId,
+      { reason: "spam" },
+      "admin-actor",
+      "127.0.0.1",
+    );
     expect(result.ok).toBe(true);
     const banEntry = auditLog.entries.find((e) => e.action === "USER_BANNED");
     expect(banEntry).toBeDefined();
