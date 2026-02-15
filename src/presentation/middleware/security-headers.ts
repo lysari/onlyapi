@@ -13,6 +13,6 @@ export const securityHeaders = (_config: AppConfig): Record<string, string> => (
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Cache-Control": "no-store",
-  "Pragma": "no-cache",
+  Pragma: "no-cache",
   "X-Permitted-Cross-Domain-Policies": "none",
 });

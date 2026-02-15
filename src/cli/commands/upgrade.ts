@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import {
   blank,
   bold,
+  confirm,
   createSpinner,
   cyan,
   dim,
@@ -32,7 +33,6 @@ import {
   success,
   warn,
   yellow,
-  confirm,
 } from "../ui.js";
 
 // ── Constants ───────────────────────────────────────────────────────────
@@ -126,7 +126,8 @@ const fetchLatestVersion = async (): Promise<string | null> => {
     if (res.ok) {
       const tags = (await res.json()) as { name: string }[];
       if (tags.length > 0) {
-        return tags[0]!.name.replace(/^v/, "");
+        const first = tags[0];
+        return first ? first.name.replace(/^v/, "") : null;
       }
     }
   } catch {
@@ -149,6 +150,7 @@ const fetchLatestVersion = async (): Promise<string | null> => {
 
 // ── Main ────────────────────────────────────────────────────────────────
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: CLI upgrade wizard is inherently branchy
 export const upgradeCommand = async (args: string[], version: string): Promise<void> => {
   const startTime = performance.now();
   const projectDir = resolve(process.cwd());
@@ -219,7 +221,11 @@ export const upgradeCommand = async (args: string[], version: string): Promise<v
 
     blank();
 
-    if (!isNewer(latestVersion, currentVersion) && !args.includes("--force") && !args.includes("-f")) {
+    if (
+      !isNewer(latestVersion, currentVersion) &&
+      !args.includes("--force") &&
+      !args.includes("-f")
+    ) {
       success("You're already on the latest version!");
       blank();
       process.exit(0);
@@ -265,9 +271,7 @@ export const upgradeCommand = async (args: string[], version: string): Promise<v
     const { mkdirSync } = await import("node:fs");
     mkdirSync(tmpDir, { recursive: true });
 
-    const tarballUrl = latestVersion
-      ? TARBALL_URL(`v${latestVersion}`)
-      : TARBALL_MAIN_URL;
+    const tarballUrl = latestVersion ? TARBALL_URL(`v${latestVersion}`) : TARBALL_MAIN_URL;
 
     const response = await fetch(tarballUrl);
 
@@ -337,7 +341,7 @@ export const upgradeCommand = async (args: string[], version: string): Promise<v
         await Bun.write(destFile, newContent);
       }
 
-      step(`${dryRun ? dim("[dry-run]") + " " : ""}Updated ${bold(cyan(filePath))}`);
+      step(`${dryRun ? `${dim("[dry-run]")} ` : ""}Updated ${bold(cyan(filePath))}`);
       updatedCount++;
     } catch {
       warn(`Could not update ${filePath}`);
@@ -381,11 +385,13 @@ export const upgradeCommand = async (args: string[], version: string): Promise<v
       }
 
       if (!dryRun) {
-        await Bun.write(pkgPath, JSON.stringify(currentPkg, null, 2) + "\n");
+        await Bun.write(pkgPath, `${JSON.stringify(currentPkg, null, 2)}\n`);
       }
 
       if (depsChanged) {
-        step(`${dryRun ? dim("[dry-run]") + " " : ""}Updated dependencies in ${bold(cyan("package.json"))}`);
+        step(
+          `${dryRun ? `${dim("[dry-run]")} ` : ""}Updated dependencies in ${bold(cyan("package.json"))}`,
+        );
       }
     } catch {
       warn("Could not merge package.json dependencies");
@@ -434,7 +440,7 @@ export const upgradeCommand = async (args: string[], version: string): Promise<v
   blank();
   if (updatedCount > 0) {
     log(
-      `  ${icons.rocket} ${bold(green("Upgrade complete!"))} ${dim(`(${formatDuration(elapsed)})`)}`
+      `  ${icons.rocket} ${bold(green("Upgrade complete!"))} ${dim(`(${formatDuration(elapsed)})`)}`,
     );
     blank();
     printKeyValue([

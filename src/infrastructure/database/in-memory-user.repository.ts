@@ -3,10 +3,12 @@ import { type AppError, conflict, notFound } from "../../core/errors/app-error.j
 import type {
   CreateUserData,
   UpdateUserData,
+  UserListOptions,
   UserRepository,
 } from "../../core/ports/user.repository.js";
 import type { UserId } from "../../core/types/brand.js";
 import { brand } from "../../core/types/brand.js";
+import { decodeCursor, encodeCursor } from "../../core/types/pagination.js";
 import { type Result, err, ok } from "../../core/types/result.js";
 import { generateId } from "../../shared/utils/id.js";
 
@@ -72,6 +74,46 @@ export const createInMemoryUserRepository = (): UserRepository => {
       if (!store.has(id)) return err(notFound("User"));
       store.delete(id);
       return ok(undefined);
+    },
+
+    async list(options: UserListOptions) {
+      let users = Array.from(store.values());
+
+      // Sort by createdAt descending
+      users.sort((a, b) => b.createdAt - a.createdAt);
+
+      // Cursor filter
+      if (options.cursor !== undefined) {
+        const decoded = decodeCursor(options.cursor);
+        if (decoded !== null) {
+          const ts = Number(decoded);
+          users = users.filter((u) => u.createdAt < ts);
+        }
+      }
+
+      // Role filter
+      if (options.role !== undefined) {
+        users = users.filter((u) => u.role === options.role);
+      }
+
+      // Search filter
+      if (options.search !== undefined) {
+        const q = options.search.toLowerCase();
+        users = users.filter((u) => u.email.includes(q));
+      }
+
+      const limit = Math.min(options.limit, 100);
+      const hasMore = users.length > limit;
+      const items = users.slice(0, limit);
+      const lastItem = items[items.length - 1];
+      const nextCursor =
+        hasMore && lastItem !== undefined ? encodeCursor(String(lastItem.createdAt)) : null;
+
+      return ok({ items, nextCursor, hasMore });
+    },
+
+    async count() {
+      return ok(store.size);
     },
   };
 };

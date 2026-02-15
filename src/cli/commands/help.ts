@@ -2,18 +2,7 @@
  * `onlyapi help` — display help information.
  */
 
-import {
-  blank,
-  bold,
-  cyan,
-  dim,
-  gray,
-  green,
-  log,
-  logo,
-  white,
-  yellow,
-} from "../ui.js";
+import { blank, bold, cyan, dim, gray, green, log, logo, white, yellow } from "../ui.js";
 
 // ── Main ────────────────────────────────────────────────────────────────
 

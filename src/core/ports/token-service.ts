@@ -1,7 +1,7 @@
-import type { Result } from "../types/result.js";
+import type { UserRole } from "../entities/user.entity.js";
 import type { AppError } from "../errors/app-error.js";
 import type { UserId } from "../types/brand.js";
-import type { UserRole } from "../entities/user.entity.js";
+import type { Result } from "../types/result.js";
 
 /**
  * Port: Token Service (JWT or similar)

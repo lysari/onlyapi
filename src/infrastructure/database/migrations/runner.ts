@@ -37,10 +37,12 @@ const getAppliedVersions = (db: Database): Set<string> => {
 const loadMigrations = async (): Promise<Migration[]> => {
   const { up: up001, down: down001 } = await import("./001_create_users.js");
   const { up: up002, down: down002 } = await import("./002_create_token_blacklist.js");
+  const { up: up003, down: down003 } = await import("./003_create_audit_log.js");
 
   return [
     { version: "001", name: "create_users", up: up001, down: down001 },
     { version: "002", name: "create_token_blacklist", up: up002, down: down002 },
+    { version: "003", name: "create_audit_log", up: up003, down: down003 },
   ];
 };
 

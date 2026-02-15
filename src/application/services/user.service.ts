@@ -1,9 +1,9 @@
-import type { UserRepository } from "../../core/ports/user.repository.js";
-import type { PasswordHasher } from "../../core/ports/password-hasher.js";
-import type { Logger } from "../../core/ports/logger.js";
 import type { User } from "../../core/entities/user.entity.js";
-import type { UserId } from "../../core/types/brand.js";
 import type { AppError } from "../../core/errors/app-error.js";
+import type { Logger } from "../../core/ports/logger.js";
+import type { PasswordHasher } from "../../core/ports/password-hasher.js";
+import type { UserRepository } from "../../core/ports/user.repository.js";
+import type { UserId } from "../../core/types/brand.js";
 import type { Result } from "../../core/types/result.js";
 import { ok } from "../../core/types/result.js";
 import type { UpdateUserDto } from "../dtos/auth.dto.js";

@@ -10,10 +10,10 @@
  *   onlyapi help                  Show help
  */
 
+import { helpCommand } from "./commands/help.js";
 import { initCommand } from "./commands/init.js";
 import { upgradeCommand } from "./commands/upgrade.js";
-import { helpCommand } from "./commands/help.js";
-import { bold, cyan, dim, error, blank, log, white } from "./ui.js";
+import { blank, bold, cyan, dim, error, log, white } from "./ui.js";
 
 // ── Version ─────────────────────────────────────────────────────────────
 

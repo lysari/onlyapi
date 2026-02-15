@@ -1,5 +1,5 @@
-import type { AppConfig } from "../infrastructure/config/config.js";
 import { cpus } from "node:os";
+import type { AppConfig } from "../infrastructure/config/config.js";
 
 // ── ANSI escape sequences (zero dependencies) ──────────────────────────
 
@@ -74,6 +74,8 @@ interface RouteInfo {
 const routes: readonly RouteInfo[] = [
   { method: "GET", path: "/health", auth: false, description: "Shallow health check" },
   { method: "GET", path: "/readiness", auth: false, description: "Deep readiness check" },
+  { method: "GET", path: "/docs", auth: false, description: "OpenAPI 3.1 spec (JSON)" },
+  { method: "GET", path: "/docs/html", auth: false, description: "Swagger UI" },
   { method: "POST", path: "/api/v1/auth/register", auth: false, description: "Register user" },
   { method: "POST", path: "/api/v1/auth/login", auth: false, description: "Login" },
   { method: "POST", path: "/api/v1/auth/refresh", auth: false, description: "Refresh token" },
@@ -81,6 +83,26 @@ const routes: readonly RouteInfo[] = [
   { method: "GET", path: "/api/v1/users/me", auth: true, description: "Get profile" },
   { method: "PATCH", path: "/api/v1/users/me", auth: true, description: "Update profile" },
   { method: "DELETE", path: "/api/v1/users/me", auth: true, description: "Delete account" },
+  { method: "GET", path: "/api/v1/admin/users", auth: true, description: "List users (admin)" },
+  { method: "GET", path: "/api/v1/admin/users/:id", auth: true, description: "Get user (admin)" },
+  {
+    method: "PATCH",
+    path: "/api/v1/admin/users/:id/role",
+    auth: true,
+    description: "Change role (admin)",
+  },
+  {
+    method: "POST",
+    path: "/api/v1/admin/users/:id/ban",
+    auth: true,
+    description: "Ban user (admin)",
+  },
+  {
+    method: "POST",
+    path: "/api/v1/admin/users/:id/unban",
+    auth: true,
+    description: "Unban user (admin)",
+  },
 ];
 
 // ── ASCII Logo ──────────────────────────────────────────────────────────
@@ -89,7 +111,7 @@ const logo = (): string => {
   const lines = [
     `${bold(cyan("  ┌─────────────────────────────────────────┐"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
-    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.1.0"))}                      ${bold(cyan("│"))}`,
+    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.2.0"))}                      ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}   ${dim(gray("Zero-dep enterprise REST API on Bun"))}    ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
     `${bold(cyan("  └─────────────────────────────────────────┘"))}`,
@@ -126,7 +148,9 @@ export const printStartupBanner = (info: StartupInfo): void => {
   lines.push("");
 
   // ── Server info ──
-  lines.push(`  ${envBadge(config.env)}  ${dim("booted in")} ${bold(green(formatUptime(bootTimeMs)))}`);
+  lines.push(
+    `  ${envBadge(config.env)}  ${dim("booted in")} ${bold(green(formatUptime(bootTimeMs)))}`,
+  );
   lines.push("");
 
   // ── URLs ──
@@ -151,8 +175,11 @@ export const printStartupBanner = (info: StartupInfo): void => {
     lines.push(`  ${gray("├─")} ${dim("Mode")}          ${green("single process")}`);
   }
 
-  lines.push(`  ${gray("├─")} ${dim("Rate limit")}    ${white(`${config.rateLimit.maxRequests} req/${config.rateLimit.windowMs / 1000}s`)}`);
-  lines.push(`  ${gray("└─")} ${dim("Log level")}     ${white(config.log.level)}`);
+  lines.push(
+    `  ${gray("├─")} ${dim("Rate limit")}    ${white(`${config.rateLimit.maxRequests} req/${config.rateLimit.windowMs / 1000}s`)}`,
+  );
+  lines.push(`  ${gray("├─")} ${dim("Log level")}     ${white(config.log.level)}`);
+  lines.push(`  ${gray("└─")} ${dim("Log format")}    ${white(config.log.format)}`);
   lines.push("");
 
   // ── Routes ──
@@ -172,7 +199,7 @@ export const printStartupBanner = (info: StartupInfo): void => {
   lines.push(`  ${dim("press")} ${bold(white("Ctrl+C"))} ${dim("to stop")}`);
   lines.push("");
 
-  process.stdout.write(lines.join("\n") + "\n");
+  process.stdout.write(`${lines.join("\n")}\n`);
 };
 
 /**
@@ -184,16 +211,20 @@ export const printClusterBanner = (workerCount: number, cpuCount: number): void 
   lines.push("");
   lines.push(logo());
   lines.push("");
-  lines.push(`  ${bgMagenta("CLUSTER")}  ${dim("spawning")} ${bold(yellow(String(workerCount)))} ${dim("workers on")} ${bold(white(String(cpuCount)))} ${dim("CPU cores")}`);
+  lines.push(
+    `  ${bgMagenta("CLUSTER")}  ${dim("spawning")} ${bold(yellow(String(workerCount)))} ${dim("workers on")} ${bold(white(String(cpuCount)))} ${dim("CPU cores")}`,
+  );
   lines.push("");
   lines.push(`  ${gray("├─")} ${dim("Master PID")}    ${white(String(process.pid))}`);
   lines.push(`  ${gray("├─")} ${dim("Runtime")}       ${magenta(`Bun ${Bun.version}`)}`);
-  lines.push(`  ${gray("└─")} ${dim("SO_REUSEPORT")}  ${green("enabled")} ${dim("(kernel load balancing)")}`);
+  lines.push(
+    `  ${gray("└─")} ${dim("SO_REUSEPORT")}  ${green("enabled")} ${dim("(kernel load balancing)")}`,
+  );
   lines.push("");
   lines.push(`  ${dim("press")} ${bold(white("Ctrl+C"))} ${dim("to stop all workers")}`);
   lines.push("");
 
-  process.stdout.write(lines.join("\n") + "\n");
+  process.stdout.write(`${lines.join("\n")}\n`);
 };
 
 /**
@@ -201,7 +232,7 @@ export const printClusterBanner = (workerCount: number, cpuCount: number): void 
  */
 export const printWorkerReady = (workerId: number, pid: number, port: number): void => {
   process.stdout.write(
-    `  ${green("✓")} ${dim("Worker")} ${bold(white(`#${workerId}`))} ${dim("ready")} ${gray(`(PID ${pid}, port ${port})`)}\n`
+    `  ${green("✓")} ${dim("Worker")} ${bold(white(`#${workerId}`))} ${dim("ready")} ${gray(`(PID ${pid}, port ${port})`)}\n`,
   );
 };
 
@@ -210,7 +241,7 @@ export const printWorkerReady = (workerId: number, pid: number, port: number): v
  */
 export const printShutdown = (signal: string): void => {
   process.stdout.write(
-    `\n  ${yellow("⏻")} ${dim("Received")} ${bold(white(signal))}${dim(", shutting down gracefully…")}\n\n`
+    `\n  ${yellow("⏻")} ${dim("Received")} ${bold(white(signal))}${dim(", shutting down gracefully…")}\n\n`,
   );
 };
 
@@ -235,7 +266,7 @@ export const printConfigError = (errors: Record<string, string[]>): void => {
   lines.push(`  ${cyan("$ cp .env.example .env")}`);
   lines.push("");
 
-  process.stderr.write(lines.join("\n") + "\n");
+  process.stderr.write(`${lines.join("\n")}\n`);
 };
 
 // ── Utilities ───────────────────────────────────────────────────────────

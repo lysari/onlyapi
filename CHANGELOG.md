@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-15
+
+### Added
+
+- **Admin endpoints** — `GET /api/v1/admin/users` (list, search, filter by role), `GET /api/v1/admin/users/:id`, `PATCH /api/v1/admin/users/:id/role`, `POST /api/v1/admin/users/:id/ban`, `POST /api/v1/admin/users/:id/unban`
+- **Cursor-based pagination** — opaque base64 cursor, `?cursor=X&limit=20` on list endpoints, `PaginatedResult<T>` type
+- **OpenAPI 3.1 specification** — auto-generated from Zod schemas at `GET /docs` (JSON) and `GET /docs/html` (embedded Swagger UI)
+- **ETag / conditional requests** — MD5-based ETag on GET 200 responses, `If-None-Match` → 304 Not Modified
+- **Request ID tracing** — per-request child logger with `requestId` binding, propagated via `X-Request-Id` header
+- **Structured JSON log mode** — `LOG_FORMAT=json` for production log aggregators (Datadog, ELK, CloudWatch)
+- **Audit log** — append-only ledger of significant system events (who, what, when, IP), SQLite-backed with `AuditLog` port
+- `AdminService` with role-based authorization, self-action prevention
+- `AuditLog` port + SQLite adapter with query filters (userId, action, since, limit)
+- Migration 003: `audit_log` table with indexes
+- Parametric route matching for admin endpoints (prefix-based, O(1) static + O(n) parametric)
+- Admin DTOs: `listUsersDto`, `changeRoleDto`, `banUserDto` validated via Zod
+- `UserRepository` extended with `list(options)` and `count()` methods
+- 30 new tests (90 unit + 30 integration = 120 total)
+- `LOG_FORMAT` config option (`pretty` | `json`)
+
+### Changed
+
+- `authorise()` middleware now returns 403 Forbidden (was incorrectly 401) for role mismatches
+- Logger `createLogger()` accepts optional `format` parameter (`"pretty"` | `"json"`)
+- `RequestContext` includes request-scoped `logger` field
+- Router supports both static O(1) map and parametric admin route matching
+- Version bumped to 1.2.0 in package.json and startup banner
+- CLI startup banner displays new admin + docs routes and log format
+- Biome config: `useLiteralKeys` disabled globally (incompatible with TS `noPropertyAccessFromIndexSignature`)
+- Migration tests updated for 3-migration schema
+
 ## [1.1.0] - 2026-02-15
 
 ### Added

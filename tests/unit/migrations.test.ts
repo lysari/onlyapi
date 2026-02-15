@@ -14,7 +14,7 @@ describe("Migrations", () => {
 
   it("applies all migrations", async () => {
     const count = await migrateUp(db, logger);
-    expect(count).toBe(2);
+    expect(count).toBe(3);
 
     // Verify tables exist
     const tables = db
@@ -23,6 +23,7 @@ describe("Migrations", () => {
     const names = tables.map((t) => t.name);
     expect(names).toContain("users");
     expect(names).toContain("token_blacklist");
+    expect(names).toContain("audit_log");
     expect(names).toContain("_migrations");
   });
 
@@ -35,21 +36,23 @@ describe("Migrations", () => {
   it("rolls back the last migration", async () => {
     await migrateUp(db, logger);
     const version = await migrateDown(db, logger);
-    expect(version).toBe("002");
+    expect(version).toBe("003");
 
-    // token_blacklist should be gone
+    // audit_log should be gone
     const tables = db
       .query("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as Array<{ name: string }>;
     const names = tables.map((t) => t.name);
-    expect(names).not.toContain("token_blacklist");
+    expect(names).not.toContain("audit_log");
     expect(names).toContain("users");
+    expect(names).toContain("token_blacklist");
   });
 
   it("rolls back all migrations", async () => {
     await migrateUp(db, logger);
-    await migrateDown(db, logger);
-    const version = await migrateDown(db, logger);
+    await migrateDown(db, logger); // rolls back 003
+    await migrateDown(db, logger); // rolls back 002
+    const version = await migrateDown(db, logger); // rolls back 001
     expect(version).toBe("001");
 
     const tables = db
@@ -60,6 +63,7 @@ describe("Migrations", () => {
 
   it("returns null when nothing to rollback", async () => {
     await migrateUp(db, logger);
+    await migrateDown(db, logger);
     await migrateDown(db, logger);
     await migrateDown(db, logger);
     const version = await migrateDown(db, logger);

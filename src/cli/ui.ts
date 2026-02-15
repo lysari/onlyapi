@@ -91,7 +91,8 @@ export const createSpinner = (message: string): Spinner => {
     start() {
       timer = setInterval(() => {
         clear();
-        process.stdout.write(`  ${cyan(spinnerFrames[frame % spinnerFrames.length]!)} ${currentMsg}`);
+        const icon = spinnerFrames[frame % spinnerFrames.length] ?? "⠋";
+        process.stdout.write(`  ${cyan(icon)} ${currentMsg}`);
         frame++;
       }, 80);
     },
@@ -168,6 +169,7 @@ export const box = (lines: string[]): void => {
 
 // ── Strip ANSI codes for length calculation ─────────────────────────────
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape stripping
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
 
 // ── Duration formatter ─────────────────────────────────────────────────

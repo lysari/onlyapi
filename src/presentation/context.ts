@@ -1,3 +1,4 @@
+import type { Logger } from "../core/ports/logger.js";
 import type { TokenPayload } from "../core/ports/token-service.js";
 import type { RequestId } from "../core/types/brand.js";
 
@@ -12,4 +13,6 @@ export interface RequestContext {
   readonly method: string;
   readonly path: string;
   readonly auth?: TokenPayload | undefined;
+  /** Request-scoped logger with requestId pre-bound */
+  readonly logger: Logger;
 }

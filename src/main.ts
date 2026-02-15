@@ -1,12 +1,14 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { createAdminService } from "./application/services/admin.service.js";
 import { createAuthService } from "./application/services/auth.service.js";
 import { createHealthService } from "./application/services/health.service.js";
 import { createUserService } from "./application/services/user.service.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { migrateUp } from "./infrastructure/database/migrations/runner.js";
 import { createSqliteAccountLockout } from "./infrastructure/database/sqlite-account-lockout.js";
+import { createSqliteAuditLog } from "./infrastructure/database/sqlite-audit-log.js";
 import { createSqliteTokenBlacklist } from "./infrastructure/database/sqlite-token-blacklist.js";
 import { createSqliteUserRepository } from "./infrastructure/database/sqlite-user.repository.js";
 import { createLogger } from "./infrastructure/logging/logger.js";
@@ -28,7 +30,7 @@ const bootstrap = async () => {
   const config = loadConfig();
 
   // 2. Infrastructure
-  const logger = createLogger(config.log.level);
+  const logger = createLogger(config.log.level, {}, config.log.format);
   const passwordHasher = createPasswordHasher();
   const tokenService = createTokenService(config.jwt);
 
@@ -54,6 +56,7 @@ const bootstrap = async () => {
     maxAttempts: config.lockout.maxAttempts,
     lockoutDurationMs: config.lockout.durationMs,
   });
+  const auditLog = createSqliteAuditLog(db);
 
   // 6. Register in DI container
   Container.register(Tokens.Logger, logger);
@@ -64,6 +67,7 @@ const bootstrap = async () => {
   Container.register(Tokens.TokenBlacklist, tokenBlacklist);
   Container.register(Tokens.AccountLockout, accountLockout);
   Container.register(Tokens.UserRepository, userRepo);
+  Container.register(Tokens.AuditLog, auditLog);
 
   // 7. Application services
   const authService = createAuthService({
@@ -83,15 +87,29 @@ const bootstrap = async () => {
 
   const healthService = createHealthService({
     logger: logger.child({ service: "health" }),
-    version: "1.1.0",
+    version: "1.2.0",
+  });
+
+  const adminService = createAdminService({
+    userRepo,
+    auditLog,
+    logger: logger.child({ service: "admin" }),
   });
 
   Container.register(Tokens.AuthService, authService);
   Container.register(Tokens.UserService, userService);
   Container.register(Tokens.HealthService, healthService);
+  Container.register(Tokens.AdminService, adminService);
 
   // 8. Presentation
-  const router = createRouter({ authService, userService, healthService, tokenService, logger });
+  const router = createRouter({
+    authService,
+    userService,
+    healthService,
+    adminService,
+    tokenService,
+    logger,
+  });
   const srv = createServer({ config, logger, router });
 
   // 9. Start

@@ -40,9 +40,7 @@ export const tryCatch = <T>(fn: () => T): Result<T, unknown> => {
 };
 
 /** Wrap an async throwing function into a Result */
-export const tryCatchAsync = async <T>(
-  fn: () => Promise<T>,
-): Promise<Result<T, unknown>> => {
+export const tryCatchAsync = async <T>(fn: () => Promise<T>): Promise<Result<T, unknown>> => {
   try {
     return ok(await fn());
   } catch (e: unknown) {

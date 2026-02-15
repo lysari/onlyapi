@@ -1,4 +1,4 @@
-export { type RequestContext } from "./context.js";
+export type { RequestContext } from "./context.js";
 export { createServer } from "./server.js";
 export { createRouter, type Router } from "./routes/index.js";
 export * from "./middleware/index.js";

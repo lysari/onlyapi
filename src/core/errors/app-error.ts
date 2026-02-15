@@ -65,17 +65,14 @@ export const badRequest = (msg: string, details?: Record<string, unknown>): AppE
 export const unauthorized = (msg = "Unauthorized"): AppError =>
   appError(ErrorCode.UNAUTHORIZED, msg);
 
-export const forbidden = (msg = "Forbidden"): AppError =>
-  appError(ErrorCode.FORBIDDEN, msg);
+export const forbidden = (msg = "Forbidden"): AppError => appError(ErrorCode.FORBIDDEN, msg);
 
 export const notFound = (resource: string): AppError =>
   appError(ErrorCode.NOT_FOUND, `${resource} not found`);
 
-export const conflict = (msg: string): AppError =>
-  appError(ErrorCode.CONFLICT, msg);
+export const conflict = (msg: string): AppError => appError(ErrorCode.CONFLICT, msg);
 
-export const rateLimited = (): AppError =>
-  appError(ErrorCode.RATE_LIMITED, "Too many requests");
+export const rateLimited = (): AppError => appError(ErrorCode.RATE_LIMITED, "Too many requests");
 
 export const validation = (details: Record<string, unknown>): AppError =>
   appError(ErrorCode.VALIDATION, "Validation failed", details);

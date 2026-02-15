@@ -1,4 +1,4 @@
-import type { Logger, LogLevel } from "../../core/ports/logger.js";
+import type { LogLevel, Logger } from "../../core/ports/logger.js";
 import { formatLogEntry } from "../../shared/log-format.js";
 
 const LEVEL_PRIORITY: Record<LogLevel, number> = {
@@ -9,22 +9,41 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   fatal: 4,
 };
 
+export type LogFormat = "pretty" | "json";
+
 /**
- * Pretty logger — zero dependencies.
- * Writes beautiful ANSI-colored output to stdout (info/debug) and stderr (warn/error/fatal).
- * Structured enough for machine parsing, beautiful enough for humans.
+ * Format a log entry as structured JSON (for Datadog, ELK, CloudWatch, etc.).
+ */
+const formatJsonEntry = (level: LogLevel, msg: string, meta: Record<string, unknown>): string => {
+  const entry: Record<string, unknown> = {
+    level,
+    msg,
+    time: new Date().toISOString(),
+    ...meta,
+  };
+  return `${JSON.stringify(entry)}\n`;
+};
+
+/**
+ * Logger — zero dependencies.
+ * Supports two modes:
+ * - "pretty": ANSI-colored human-readable output (default, for development)
+ * - "json": structured JSON lines (for production log aggregators)
  */
 export const createLogger = (
   minLevel: LogLevel = "info",
   bindings: Record<string, unknown> = {},
+  format: LogFormat = "pretty",
 ): Logger => {
   const minPriority = LEVEL_PRIORITY[minLevel];
+
+  const formatter = format === "json" ? formatJsonEntry : formatLogEntry;
 
   const write = (level: LogLevel, msg: string, meta?: Record<string, unknown>): void => {
     if (LEVEL_PRIORITY[level] < minPriority) return;
 
     const allMeta = { ...bindings, ...meta };
-    const line = formatLogEntry(level, msg, allMeta);
+    const line = formatter(level, msg, allMeta);
 
     if (LEVEL_PRIORITY[level] >= LEVEL_PRIORITY.warn) {
       process.stderr.write(line);
@@ -39,6 +58,6 @@ export const createLogger = (
     warn: (msg, meta) => write("warn", msg, meta),
     error: (msg, meta) => write("error", msg, meta),
     fatal: (msg, meta) => write("fatal", msg, meta),
-    child: (extra) => createLogger(minLevel, { ...bindings, ...extra }),
+    child: (extra) => createLogger(minLevel, { ...bindings, ...extra }, format),
   };
 };

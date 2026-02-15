@@ -1,6 +1,6 @@
+import { type AppError, rateLimited } from "../../core/errors/app-error.js";
+import { type Result, err, ok } from "../../core/types/result.js";
 import type { AppConfig } from "../../infrastructure/config/config.js";
-import { rateLimited, type AppError } from "../../core/errors/app-error.js";
-import { ok, err, type Result } from "../../core/types/result.js";
 
 /**
  * Fixed-window rate limiter — in-memory, O(1) per check.

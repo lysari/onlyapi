@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import {
   blank,
   bold,
+  confirm,
   createSpinner,
   cyan,
   dim,
@@ -27,13 +28,12 @@ import {
   info,
   log,
   logo,
+  prompt,
   randomSecret,
   section,
   step,
   warn,
   white,
-  confirm,
-  prompt,
 } from "../ui.js";
 
 // ── Constants ───────────────────────────────────────────────────────────
@@ -46,7 +46,8 @@ const VALID_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 const validateProjectName = (name: string): string | null => {
   if (!name) return "Project name is required.";
-  if (!VALID_NAME_RE.test(name)) return "Project name can only contain letters, numbers, hyphens, and underscores.";
+  if (!VALID_NAME_RE.test(name))
+    return "Project name can only contain letters, numbers, hyphens, and underscores.";
   if (name.length > 214) return "Project name is too long (max 214 chars).";
   return null;
 };
@@ -81,6 +82,7 @@ const hasCommand = async (cmd: string): Promise<boolean> => {
 
 // ── Main ────────────────────────────────────────────────────────────────
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: CLI wizard is inherently branchy
 export const initCommand = async (args: string[], version: string): Promise<void> => {
   const startTime = performance.now();
 
@@ -145,7 +147,14 @@ export const initCommand = async (args: string[], version: string): Promise<void
   if (hasGit) {
     spinner.update("Cloning from GitHub...");
     const { exitCode } = await exec(
-      ["git", "clone", "--depth=1", "--single-branch", REPO_URL, projectName === "." ? "." : projectName],
+      [
+        "git",
+        "clone",
+        "--depth=1",
+        "--single-branch",
+        REPO_URL,
+        projectName === "." ? "." : projectName,
+      ],
       projectName === "." ? targetDir : process.cwd(),
     );
     cloneSuccess = exitCode === 0;
@@ -203,11 +212,11 @@ export const initCommand = async (args: string[], version: string): Promise<void
       pkg.version = "0.1.0";
       pkg.description = "";
       pkg.author = "";
-      delete pkg.repository;
-      delete pkg.bugs;
-      delete pkg.homepage;
+      pkg.repository = undefined;
+      pkg.bugs = undefined;
+      pkg.homepage = undefined;
 
-      await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+      await Bun.write(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
       step(`Updated ${bold(cyan("package.json"))}`);
     } catch {
       warn("Could not update package.json — you can edit it manually");
@@ -222,10 +231,7 @@ export const initCommand = async (args: string[], version: string): Promise<void
     try {
       let envContent = await Bun.file(envExamplePath).text();
       const secret = randomSecret(64);
-      envContent = envContent.replace(
-        "change-me-to-a-64-char-random-string",
-        secret,
-      );
+      envContent = envContent.replace("change-me-to-a-64-char-random-string", secret);
       await Bun.write(envPath, envContent);
       step(`Generated ${bold(cyan(".env"))} with secure JWT_SECRET`);
     } catch {
@@ -254,7 +260,10 @@ export const initCommand = async (args: string[], version: string): Promise<void
   // ── Step 7: Initial git commit ──
   if (hasGit) {
     await exec(["git", "add", "-A"], targetDir);
-    await exec(["git", "commit", "-m", "Initial commit from onlyApi CLI", "--no-verify"], targetDir);
+    await exec(
+      ["git", "commit", "-m", "Initial commit from onlyApi CLI", "--no-verify"],
+      targetDir,
+    );
     step("Created initial commit");
   }
 
@@ -262,7 +271,9 @@ export const initCommand = async (args: string[], version: string): Promise<void
   const elapsed = performance.now() - startTime;
 
   blank();
-  log(`  ${icons.rocket} ${bold(green("Project created successfully!"))} ${dim(`(${formatDuration(elapsed)})`)}`);
+  log(
+    `  ${icons.rocket} ${bold(green("Project created successfully!"))} ${dim(`(${formatDuration(elapsed)})`)}`,
+  );
   blank();
 
   // Next steps

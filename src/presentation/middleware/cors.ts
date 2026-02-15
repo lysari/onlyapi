@@ -13,7 +13,8 @@ export const corsHeaders = (
 
   // If wildcard, allow everything
   const isAllowed =
-    allowedOrigins.includes("*") || (requestOrigin !== null && allowedOrigins.includes(requestOrigin));
+    allowedOrigins.includes("*") ||
+    (requestOrigin !== null && allowedOrigins.includes(requestOrigin));
 
   if (!isAllowed && requestOrigin !== null) return null;
 
@@ -30,10 +31,7 @@ export const corsHeaders = (
 };
 
 /** Returns a 204 preflight response or null if not a preflight */
-export const handlePreflight = (
-  config: AppConfig,
-  req: Request,
-): Response | null => {
+export const handlePreflight = (config: AppConfig, req: Request): Response | null => {
   if (req.method !== "OPTIONS") return null;
 
   const origin = req.headers.get("origin");

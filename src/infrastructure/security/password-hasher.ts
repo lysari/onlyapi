@@ -1,6 +1,6 @@
+import { type AppError, internal } from "../../core/errors/app-error.js";
 import type { PasswordHasher } from "../../core/ports/password-hasher.js";
-import { ok, err, type Result } from "../../core/types/result.js";
-import { internal, type AppError } from "../../core/errors/app-error.js";
+import { type Result, err, ok } from "../../core/types/result.js";
 
 /**
  * Bun-native password hasher using Argon2id via Bun.password.

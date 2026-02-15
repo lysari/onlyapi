@@ -38,7 +38,7 @@
 - **Clean Architecture** — Domain → Application → Infrastructure → Presentation
 - **Strictest TypeScript** — 22+ compiler flags, branded types, `Result<T,E>` monad (no `throw`)
 - **Security-first** — Argon2id (Bun-native), HMAC-SHA256 JWT (Web Crypto API), CORS, rate-limiting, security headers
-- **67 tests** — unit + integration, all passing
+- **120 tests** — unit + integration, all passing
 
 ## Architecture
 
@@ -256,7 +256,7 @@ Benchmarked on MacBook Pro (Intel i7-9750H, 12 threads) with [bombardier](https:
 ## Testing
 
 ```bash
-# Run all tests (67 tests across 10 files)
+# Run all tests (120 tests across 18 files)
 bun test
 
 # Watch mode
@@ -286,13 +286,13 @@ Tests cover:
 
 ### v1.2 — API Maturity
 
-- [ ] **Admin endpoints** — `GET /api/v1/admin/users` (list, search, ban, change role)
-- [ ] **Pagination** — cursor-based `?cursor=X&limit=20` on list endpoints
-- [ ] **OpenAPI 3.1 spec** — auto-generated from Zod schemas, served at `/docs`
-- [ ] **ETag / conditional requests** — `If-None-Match` support for GET endpoints
-- [ ] **Request ID tracing** — propagate `X-Request-Id` into child loggers + response
-- [ ] **Structured JSON log mode** — `LOG_FORMAT=json` for production log aggregators (Datadog, ELK)
-- [ ] **Audit log** — append-only log of who did what (user ID, action, timestamp, IP)
+- [x] **Admin endpoints** — `GET /api/v1/admin/users` (list, search, ban, change role)
+- [x] **Pagination** — cursor-based `?cursor=X&limit=20` on list endpoints
+- [x] **OpenAPI 3.1 spec** — auto-generated from Zod schemas, served at `/docs`
+- [x] **ETag / conditional requests** — `If-None-Match` support for GET endpoints
+- [x] **Request ID tracing** — propagate `X-Request-Id` into child loggers + response
+- [x] **Structured JSON log mode** — `LOG_FORMAT=json` for production log aggregators (Datadog, ELK)
+- [x] **Audit log** — append-only log of who did what (user ID, action, timestamp, IP)
 
 ### v1.3 — Observability & Resilience
 
@@ -343,7 +343,7 @@ Tests cover:
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
 | Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
-| Testing | ✅ 67 tests (unit + integration) |
+| Testing | ✅ 120 tests (unit + integration) |
 | CI/CD | ✅ GitHub Actions (lint → check → test → build) |
 | Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
 | Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout |

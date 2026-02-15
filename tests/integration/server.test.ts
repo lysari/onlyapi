@@ -26,10 +26,12 @@ beforeAll(async () => {
   const { createInMemoryTokenBlacklist } = await import("../../src/infrastructure/security/token-blacklist.js");
   const { createInMemoryAccountLockout } = await import("../../src/infrastructure/security/account-lockout.js");
   const { createSqliteUserRepository } = await import("../../src/infrastructure/database/sqlite-user.repository.js");
+  const { createSqliteAuditLog } = await import("../../src/infrastructure/database/sqlite-audit-log.js");
   const { migrateUp } = await import("../../src/infrastructure/database/migrations/runner.js");
   const { createAuthService } = await import("../../src/application/services/auth.service.js");
   const { createUserService } = await import("../../src/application/services/user.service.js");
   const { createHealthService } = await import("../../src/application/services/health.service.js");
+  const { createAdminService } = await import("../../src/application/services/admin.service.js");
   const { createRouter } = await import("../../src/presentation/routes/router.js");
   const { createServer } = await import("../../src/presentation/server.js");
 
@@ -54,8 +56,10 @@ beforeAll(async () => {
   const authService = createAuthService({ userRepo, passwordHasher, tokenService, tokenBlacklist, accountLockout, logger });
   const userService = createUserService({ userRepo, passwordHasher, logger });
   const healthService = createHealthService({ logger, version: "test" });
+  const auditLog = createSqliteAuditLog(db);
+  const adminService = createAdminService({ userRepo, auditLog, logger });
 
-  const router = createRouter({ authService, userService, healthService, tokenService, logger });
+  const router = createRouter({ authService, userService, healthService, adminService, tokenService, logger });
   const srv = createServer({ config, logger, router });
   server = srv.start();
 });
@@ -263,5 +267,110 @@ describe("Integration: Account lockout", () => {
       body: JSON.stringify({ email: "lockout@test.com", password: "Test1234!" }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+// ── v1.2 integration tests ──────────────────────────────────────────────
+
+describe("Integration: OpenAPI docs", () => {
+  it("GET /docs returns OpenAPI JSON spec", async () => {
+    const res = await fetch(`${BASE}/docs`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { openapi: string; info: { title: string } };
+    expect(body.openapi).toBe("3.1.0");
+    expect(body.info.title).toBe("onlyApi");
+  });
+
+  it("GET /docs/html returns Swagger UI HTML", async () => {
+    const res = await fetch(`${BASE}/docs/html`);
+    expect(res.status).toBe(200);
+    const ct = res.headers.get("content-type");
+    expect(ct).toContain("text/html");
+    const text = await res.text();
+    expect(text).toContain("swagger-ui");
+  });
+});
+
+describe("Integration: ETag / Conditional requests", () => {
+  it("GET responses include ETag header", async () => {
+    const res = await fetch(`${BASE}/docs`);
+    expect(res.status).toBe(200);
+    const etag = res.headers.get("etag");
+    expect(etag).toBeTruthy();
+  });
+
+  it("304 Not Modified when If-None-Match matches", async () => {
+    // Use /docs endpoint since its body is static (unlike /health which has uptime)
+    const res1 = await fetch(`${BASE}/docs`);
+    const etag = res1.headers.get("etag");
+    expect(etag).toBeTruthy();
+
+    const res2 = await fetch(`${BASE}/docs`, {
+      headers: { "If-None-Match": etag ?? "" },
+    });
+    expect(res2.status).toBe(304);
+  });
+
+  it("200 when If-None-Match does not match", async () => {
+    const res = await fetch(`${BASE}/docs`, {
+      headers: { "If-None-Match": '"stale-etag"' },
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("Integration: Request ID tracing", () => {
+  it("response includes X-Request-Id header", async () => {
+    const res = await fetch(`${BASE}/health`);
+    const rid = res.headers.get("x-request-id");
+    expect(rid).toBeTruthy();
+    expect(typeof rid).toBe("string");
+  });
+
+  it("each request gets a unique request ID", async () => {
+    const res1 = await fetch(`${BASE}/health`);
+    const res2 = await fetch(`${BASE}/health`);
+    const rid1 = res1.headers.get("x-request-id");
+    const rid2 = res2.headers.get("x-request-id");
+    expect(rid1).not.toBe(rid2);
+  });
+});
+
+describe("Integration: Admin endpoints", () => {
+  let adminToken = "";
+
+  it("register an admin user", async () => {
+    // Register a user, then we'll use them for admin tests
+    // The first user in the system — we need to figure out how to make them admin
+    // Since the system doesn't expose admin registration, we need to register and
+    // then the test assumes the first registered user has admin role
+    // OR we directly use the existing user from previous tests
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "admin-test@test.com", password: "Test1234!" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { accessToken: string } };
+    adminToken = body.data.accessToken;
+  });
+
+  it("GET /api/v1/admin/users requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/admin/users`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/v1/admin/users rejects non-admin users", async () => {
+    // Regular user token should be rejected (role is 'user')
+    const res = await fetch(`${BASE}/api/v1/admin/users`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    // The registered user has role 'user', so this should be 403
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/v1/admin/users/:id requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/admin/users/some-id`);
+    expect(res.status).toBe(401);
   });
 });

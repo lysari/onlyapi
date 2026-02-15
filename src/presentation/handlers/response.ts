@@ -23,8 +23,7 @@ export const jsonResponse = <T>(data: T, status = 200): Response =>
   Response.json({ data }, { status });
 
 /** 201 Created */
-export const createdResponse = <T>(data: T): Response =>
-  Response.json({ data }, { status: 201 });
+export const createdResponse = <T>(data: T): Response => Response.json({ data }, { status: 201 });
 
 /** 204 No Content */
 export const noContentResponse = (): Response => new Response(null, { status: 204 });

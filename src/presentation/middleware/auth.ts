@@ -1,8 +1,8 @@
-import type { TokenService, TokenPayload } from "../../core/ports/token-service.js";
-import type { AppError } from "../../core/errors/app-error.js";
-import { unauthorized } from "../../core/errors/app-error.js";
-import { err, type Result } from "../../core/types/result.js";
 import type { UserRole } from "../../core/entities/user.entity.js";
+import type { AppError } from "../../core/errors/app-error.js";
+import { forbidden, unauthorized } from "../../core/errors/app-error.js";
+import type { TokenPayload, TokenService } from "../../core/ports/token-service.js";
+import { type Result, err } from "../../core/types/result.js";
 
 /**
  * Extracts and verifies the Bearer token from the Authorization header.
@@ -33,7 +33,7 @@ export const authorise = (
   allowedRoles: readonly UserRole[],
 ): Result<TokenPayload, AppError> => {
   if (!allowedRoles.includes(payload.role)) {
-    return err(unauthorized("Insufficient permissions"));
+    return err(forbidden("Insufficient permissions"));
   }
   return { ok: true, value: payload };
 };

@@ -1,1 +1,1 @@
-export { createLogger } from "./logger.js";
+export { createLogger, type LogFormat } from "./logger.js";

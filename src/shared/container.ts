@@ -40,5 +40,7 @@ export const Tokens = {
   AuthService: Symbol.for("AuthService"),
   UserService: Symbol.for("UserService"),
   HealthService: Symbol.for("HealthService"),
+  AdminService: Symbol.for("AdminService"),
+  AuditLog: Symbol.for("AuditLog"),
   Database: Symbol.for("Database"),
 } as const;

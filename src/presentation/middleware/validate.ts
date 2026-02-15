@@ -1,6 +1,6 @@
 import type { ZodSchema } from "zod";
-import { validation, type AppError } from "../../core/errors/app-error.js";
-import { ok, err, type Result } from "../../core/types/result.js";
+import { type AppError, validation } from "../../core/errors/app-error.js";
+import { type Result, err, ok } from "../../core/types/result.js";
 
 /**
  * Validate an unknown body against a Zod schema.

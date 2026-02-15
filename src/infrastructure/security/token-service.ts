@@ -1,8 +1,8 @@
-import type { TokenService, TokenPayload, TokenPair } from "../../core/ports/token-service.js";
-import { ok, err, type Result } from "../../core/types/result.js";
-import { unauthorized, internal, type AppError } from "../../core/errors/app-error.js";
-import type { UserId } from "../../core/types/brand.js";
 import type { UserRole } from "../../core/entities/user.entity.js";
+import { type AppError, internal, unauthorized } from "../../core/errors/app-error.js";
+import type { TokenPair, TokenPayload, TokenService } from "../../core/ports/token-service.js";
+import type { UserId } from "../../core/types/brand.js";
+import { type Result, err, ok } from "../../core/types/result.js";
 
 /**
  * JWT token service using Web Crypto API (Bun-native, zero deps).

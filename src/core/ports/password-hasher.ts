@@ -1,5 +1,5 @@
-import type { Result } from "../types/result.js";
 import type { AppError } from "../errors/app-error.js";
+import type { Result } from "../types/result.js";
 
 /**
  * Port: Password Hasher

@@ -1,11 +1,11 @@
-import type { AppConfig } from "../infrastructure/config/config.js";
 import type { Logger } from "../core/ports/logger.js";
-import type { Router } from "./routes/router.js";
-import type { RequestContext } from "./context.js";
 import { brand } from "../core/types/brand.js";
+import type { AppConfig } from "../infrastructure/config/config.js";
+import { formatAccessLog, formatCorsRejectLog, formatRateLimitLog } from "../shared/log-format.js";
 import { generateId } from "../shared/utils/id.js";
+import type { RequestContext } from "./context.js";
 import { securityHeaders } from "./middleware/security-headers.js";
-import { formatAccessLog, formatRateLimitLog, formatCorsRejectLog } from "../shared/log-format.js";
+import type { Router } from "./routes/router.js";
 
 interface ServerDeps {
   readonly config: AppConfig;
@@ -54,8 +54,14 @@ export const createServer = (deps: ServerDeps) => {
   /** Pre-built 204 preflight headers (fully static — zero alloc on preflight) */
   const preflightBaseHeaders = new Headers();
   preflightBaseHeaders.set("Access-Control-Allow-Credentials", "true");
-  preflightBaseHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  preflightBaseHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id");
+  preflightBaseHeaders.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  );
+  preflightBaseHeaders.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Request-Id",
+  );
   preflightBaseHeaders.set("Access-Control-Max-Age", "86400");
   preflightBaseHeaders.set("Vary", "Origin");
   for (const [k, v] of secHeaderEntries) preflightBaseHeaders.set(k, v);
@@ -118,7 +124,11 @@ export const createServer = (deps: ServerDeps) => {
 
   // ── Hot path ──
 
-  const handleRequest = async (req: Request, server: ReturnType<typeof Bun.serve>): Promise<Response> => {
+  const handleRequest = async (
+    req: Request,
+    server: ReturnType<typeof Bun.serve>,
+  ): // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTTP hot path handles many concerns
+  Promise<Response> => {
     const method = req.method;
 
     // Fast-path: OPTIONS preflight — skip ALL middleware, near-zero alloc
@@ -187,6 +197,7 @@ export const createServer = (deps: ServerDeps) => {
       ip,
       method,
       path,
+      logger: logger.child({ requestId }),
     };
 
     let response: Response;
@@ -202,6 +213,37 @@ export const createServer = (deps: ServerDeps) => {
       h.set("X-Request-Id", requestId);
       for (const [k, v] of secHeaderEntries) h.set(k, v);
       return new Response(internalErrorBody, { status: 500, headers: h });
+    }
+
+    // ── ETag / conditional GET ──
+    // For GET 200 responses with JSON content, compute ETag and check If-None-Match
+    if (method === "GET" && response.status === 200) {
+      const body = await response.text();
+      const hash = new Bun.CryptoHasher("md5").update(body).digest("hex");
+      const etag = `"${hash}"`;
+
+      const ifNoneMatch = req.headers.get("if-none-match");
+      if (ifNoneMatch === etag) {
+        // 304 Not Modified — no body, just headers
+        const notModifiedHeaders = new Headers();
+        notModifiedHeaders.set("ETag", etag);
+        notModifiedHeaders.set("X-Request-Id", requestId);
+        for (const [k, v] of secHeaderEntries) notModifiedHeaders.set(k, v);
+
+        if (shouldLog) {
+          const durationMs = Math.round((performance.now() - ctx.startTime) * 100) / 100;
+          writeLog(formatAccessLog(method, path, 304, durationMs, ip, requestId));
+        }
+
+        return new Response(null, { status: 304, headers: notModifiedHeaders });
+      }
+
+      // Rebuild response with ETag header and original body
+      response = new Response(body, {
+        status: response.status,
+        headers: response.headers,
+      });
+      response.headers.set("ETag", etag);
     }
 
     // ── Append cross-cutting headers to the response ──

@@ -30,6 +30,7 @@ const configSchema = z.object({
 
   log: z.object({
     level: z.enum(["debug", "info", "warn", "error", "fatal"]).default("info"),
+    format: z.enum(["pretty", "json"]).default("pretty"),
   }),
 
   database: z.object({
@@ -66,6 +67,7 @@ export const loadConfig = (): AppConfig => {
     },
     log: {
       level: Bun.env["LOG_LEVEL"],
+      format: Bun.env["LOG_FORMAT"],
     },
     database: {
       url: Bun.env["DATABASE_URL"],

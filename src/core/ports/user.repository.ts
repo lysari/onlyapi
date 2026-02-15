@@ -1,7 +1,8 @@
-import type { Result } from "../types/result.js";
-import type { AppError } from "../errors/app-error.js";
 import type { User, UserRole } from "../entities/user.entity.js";
+import type { AppError } from "../errors/app-error.js";
 import type { UserId } from "../types/brand.js";
+import type { CursorParams, PaginatedResult } from "../types/pagination.js";
+import type { Result } from "../types/result.js";
 
 /**
  * Port: User Repository
@@ -13,6 +14,8 @@ export interface UserRepository {
   create(data: CreateUserData): Promise<Result<User, AppError>>;
   update(id: UserId, data: UpdateUserData): Promise<Result<User, AppError>>;
   delete(id: UserId): Promise<Result<void, AppError>>;
+  list(options: UserListOptions): Promise<Result<PaginatedResult<User>, AppError>>;
+  count(): Promise<Result<number, AppError>>;
 }
 
 export interface CreateUserData {
@@ -24,5 +27,10 @@ export interface CreateUserData {
 export interface UpdateUserData {
   readonly email?: string | undefined;
   readonly passwordHash?: string | undefined;
+  readonly role?: UserRole | undefined;
+}
+
+export interface UserListOptions extends CursorParams {
+  readonly search?: string | undefined;
   readonly role?: UserRole | undefined;
 }

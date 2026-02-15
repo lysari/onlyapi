@@ -1,4 +1,4 @@
-import type { UserId, Timestamp } from "../types/index.js";
+import type { Timestamp, UserId } from "../types/index.js";
 
 /**
  * User entity — pure data, no behaviour, no framework deps.
