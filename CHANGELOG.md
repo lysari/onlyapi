@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-16
+
+### Added
+
+- **PostgreSQL adapter** — zero-dep Postgres support via `Bun.sql`; 9 repository implementations (user, token blacklist, account lockout, audit log, verification tokens, refresh token store, API keys, password history, OAuth accounts); automatic DDL migration runner (`pgMigrateUp` / `pgMigrateDown`); config-driven adapter selection (`DATABASE_DRIVER=sqlite|postgres`)
+- **Redis cache adapter** — zero-dep Redis client over raw RESP protocol via `Bun.connect()` TCP; `Cache` port with `get`, `set`, `del`, `has`, `incr`, `delPattern`, `close` operations; in-memory fallback cache with TTL and auto-prune; config-driven selection (`REDIS_ENABLED=true|false`)
+- **API versioning** — URL-based version negotiation (`/api/v1/...` and `/api/v2/...`); v2 paths normalized to v1 for shared handler lookup; v1 responses include `Deprecation: true`, `Sunset`, and `Link` headers; v2 responses include clean `API-Version: v2` header; `Accept-Version` header support
+- **Internationalization (i18n)** — 5 language catalogs (en, es, fr, de, ja) with 33 message keys; RFC 7231 `Accept-Language` quality-value parsing; `Content-Language` response header; `resolveLocale`, `t()` translator, `createI18nContext` helpers; config via `I18N_DEFAULT_LOCALE` and `I18N_SUPPORTED_LOCALES`
+- **Kubernetes manifests** — production-ready K8s resources: Namespace, ConfigMap, Secret, Deployment (2 replicas, rolling update, liveness/readiness/startup probes, resource limits), Service (ClusterIP), Ingress (nginx, TLS, cert-manager), HPA (CPU 70% / memory 80%, min 2 max 10), PodDisruptionBudget, NetworkPolicy (DNS, Postgres, Redis egress)
+- **Helm chart** — full `helm/onlyapi/` chart with Chart.yaml (appVersion 2.0.0), values.yaml, and 8 templates (deployment, service, configmap, secret, ingress, HPA, serviceaccount, PDB); configurable replicas, probes, autoscaling, and secrets
+- **CD pipeline** — `.github/workflows/deploy.yml` continuous deployment: Docker Buildx multi-arch builds (amd64 + arm64), push to GHCR, staging deploy with Helm + smoke test, production deploy with Helm + GitHub Release; triggered by `v*` tags or manual dispatch
+- **E2E test suite** — 28 end-to-end tests in `tests/e2e/journey.test.ts` spawning a real server with isolated database; complete user journey (register → login → refresh → update → logout); API versioning headers; i18n Content-Language; security headers; ETag/304 conditional GET; CORS preflight; OpenAPI + Metrics
+- **Load test harness** — `tests/load/harness.ts` automated performance regression detection; CLI-driven (--url, --duration, --concurrency, --max-p99, --min-rps); concurrent worker pool; latency percentile computation (p50/p90/p95/p99); 4 scenarios (health, register, login, metrics); threshold pass/fail
+- **Postman collection** — `postman/onlyapi-v2.postman_collection.json` with all endpoints (health, auth, users, API keys, admin, webhooks, SSE, docs, metrics, v2 endpoints); auto-extraction scripts for tokens; variables for baseUrl, credentials, token management
+
+### Changed
+
+- Config schema extended with `database.driver` (sqlite | postgres), `redis.*` (enabled, host, port, password, db), `i18n.*` (defaultLocale, supportedLocales)
+- `main.ts` bootstrap conditionally selects SQLite or Postgres adapters and in-memory or Redis cache based on config
+- DI container expanded with `Cache` token
+- Server context includes `apiVersion` and `i18n` fields; responses include `Content-Language` and version headers
+- Test count: 282 → 351 (267 unit + 56 integration + 28 E2E) across 36 files
+- Version bumped to 2.0.0
+
+---
+
 ## [1.5.0] - 2026-02-16
 
 ### Added

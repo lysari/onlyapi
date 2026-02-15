@@ -38,7 +38,7 @@
 - **Clean Architecture** — Domain → Application → Infrastructure → Presentation
 - **Strictest TypeScript** — 22+ compiler flags, branded types, `Result<T,E>` monad (no `throw`)
 - **Security-first** — Argon2id (Bun-native), HMAC-SHA256 JWT (Web Crypto API), CORS, rate-limiting, security headers
-- **282 tests** — unit + integration, all passing
+- **351 tests** — unit + integration + E2E, all passing
 
 ## Architecture
 
@@ -54,12 +54,14 @@ src/
 │   └── services/           # AuthService, UserService, HealthService
 ├── infrastructure/         # Adapters (swap without touching business logic)
 │   ├── config/             # Zod-validated environment config — fail-fast on boot
-│   ├── database/           # SQLite + in-memory adapters, migrations
+│   ├── database/           # SQLite + PostgreSQL + in-memory adapters, migrations
+│   ├── cache/              # In-memory + Redis cache adapters (zero-dep RESP protocol)
 │   ├── logging/            # Structured JSON logger with batched async writes
 │   └── security/           # Argon2id hasher, HMAC-SHA256 JWT service
 ├── presentation/           # HTTP layer
 │   ├── handlers/           # Route handlers (health, auth, user)
-│   ├── middleware/          # CORS, rate-limit, auth, validation, security headers
+│   ├── middleware/          # CORS, rate-limit, auth, validation, security headers, versioning
+│   ├── i18n/               # 5 language catalogs, Accept-Language parsing
 │   ├── routes/             # O(1) Map-based router
 │   ├── context.ts          # Typed RequestContext
 │   └── server.ts           # Bun.serve() with inlined hot-path optimizations
@@ -165,9 +167,12 @@ WORKERS=8 bun run start:cluster
 |--------|------|------|-------------|
 | `GET` | `/health` | No | Shallow health check (instant) |
 | `GET` | `/readiness` | No | Deep readiness check |
+| `GET` | `/docs` | No | OpenAPI 3.1 JSON spec |
+| `GET` | `/metrics` | No | Prometheus metrics |
 | `POST` | `/api/v1/auth/register` | No | Register a new user |
 | `POST` | `/api/v1/auth/login` | No | Login, returns JWT pair |
 | `POST` | `/api/v1/auth/refresh` | No | Refresh access token |
+| `POST` | `/api/v1/auth/logout` | Bearer | Logout & blacklist tokens |
 | `GET` | `/api/v1/users/me` | Bearer | Get current user profile |
 | `PATCH` | `/api/v1/users/me` | Bearer | Update current user |
 | `DELETE` | `/api/v1/users/me` | Bearer | Delete current user |
@@ -188,6 +193,7 @@ WORKERS=8 bun run start:cluster
 | `DELETE` | `/api/v1/webhooks/:id` | Admin | Remove webhook subscription |
 | `GET` | `/api/v1/events/stream` | Bearer | SSE real-time event stream |
 | `WS` | `/ws` | JWT | WebSocket real-time connection |
+| | `/api/v2/...` | — | All v1 endpoints available on v2 (clean version headers) |
 
 ### Example
 
@@ -231,6 +237,15 @@ All configuration is loaded via environment variables and validated with Zod at 
 | `PASSWORD_REQUIRE_SPECIAL` | `true` | Require special character |
 | `PASSWORD_HISTORY_COUNT` | `5` | Previous passwords to block reuse |
 | `PASSWORD_MAX_AGE_DAYS` | `0` | Password expiry (0 = never) |
+| `DATABASE_DRIVER` | `sqlite` | Database adapter: `sqlite` \| `postgres` |
+| `DATABASE_URL` | — | PostgreSQL connection string |
+| `REDIS_ENABLED` | `false` | Enable Redis cache |
+| `REDIS_HOST` | `127.0.0.1` | Redis hostname |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | — | Redis password |
+| `REDIS_DB` | `0` | Redis database number |
+| `I18N_DEFAULT_LOCALE` | `en` | Default response locale |
+| `I18N_SUPPORTED_LOCALES` | `en` | Comma-separated supported locales |
 | `OAUTH_GOOGLE_CLIENT_ID` | — | Google OAuth2 client ID |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | — | Google OAuth2 client secret |
 | `OAUTH_GITHUB_CLIENT_ID` | — | GitHub OAuth2 client ID |
@@ -284,7 +299,7 @@ Benchmarked on MacBook Pro (Intel i7-9750H, 12 threads) with [bombardier](https:
 ## Testing
 
 ```bash
-# Run all tests (282 tests across 32 files)
+# Run all tests (351 tests across 36 files)
 bun test
 
 # Watch mode
@@ -295,8 +310,10 @@ bun test tests/unit/result.test.ts
 ```
 
 Tests cover:
-- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository, TOTP, password policy, API keys, refresh tokens, verification tokens, OAuth accounts, password history, migrations, account lockout, event bus, event factory, webhook registry, job queue
+- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository, TOTP, password policy, API keys, refresh tokens, verification tokens, OAuth accounts, password history, migrations, account lockout, event bus, event factory, webhook registry, job queue, cache (in-memory), i18n, API versioning
 - **Integration**: Full HTTP request lifecycle (health, auth flow, email verification, MFA, API keys, password policy, webhooks, SSE, error handling, CORS)
+- **E2E**: Complete user journey, API versioning headers, i18n negotiation, ETag/304, security headers, OpenAPI, Prometheus metrics
+- **Load**: Automated performance regression detection with p50/p90/p95/p99 latency checks
 
 ## Roadmap
 
@@ -352,16 +369,16 @@ Tests cover:
 
 ### v2.0 — Scale & Ecosystem
 
-- [ ] **Postgres adapter** — connection pooling, transactions, query builder
-- [ ] **Redis adapter** — caching layer, session store, rate limiter backend, pub/sub
-- [ ] **Kubernetes manifests** — Deployment, Service, Ingress, HPA, liveness/readiness probes
-- [ ] **Helm chart** — parameterized K8s deployment
-- [ ] **CD pipeline** — GitHub Actions deploy to fly.io / Railway / AWS
-- [ ] **API versioning** — v2 route modules coexisting with v1, deprecation headers
-- [ ] **i18n** — `Accept-Language` header, translated error messages
-- [ ] **E2E test suite** — full client simulation with test containers
-- [ ] **Load test harness** — automated bombardier runs with regression detection
-- [ ] **Postman / Insomnia collection** — pre-built API client for contributors
+- [x] **Postgres adapter** — zero-dep via `Bun.sql`, 9 repository implementations, DDL migration runner
+- [x] **Redis adapter** — zero-dep RESP protocol over `Bun.connect()` TCP, Cache port with TTL
+- [x] **Kubernetes manifests** — Deployment, Service, Ingress, HPA, PDB, NetworkPolicy
+- [x] **Helm chart** — parameterized K8s deployment with 8 templates
+- [x] **CD pipeline** — GitHub Actions deploy: multi-arch Docker build, staging → production
+- [x] **API versioning** — v2 route modules coexisting with v1, deprecation headers
+- [x] **i18n** — `Accept-Language` header, 5 languages, 33 translated message keys
+- [x] **E2E test suite** — 28 tests, full client simulation with real server
+- [x] **Load test harness** — automated performance regression detection with threshold checks
+- [x] **Postman collection** — pre-built API client with auto-token extraction
 
 ### Current Status
 
@@ -371,14 +388,15 @@ Tests cover:
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
 | Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
-| Testing | ✅ 282 tests (unit + integration) |
-| CI/CD | ✅ GitHub Actions (lint → check → test → build) |
-| Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
-| Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout, email verification, password reset, MFA/TOTP, OAuth2 (Google + GitHub), API keys, password policy |
-| Containerization | ✅ Dockerfile (distroless), docker-compose |
+| Testing | ✅ 351 tests (unit + integration + E2E) |
+| CI/CD | ✅ GitHub Actions CI + CD (staging → production) |
+| Database | ✅ SQLite via bun:sqlite + PostgreSQL via Bun.sql |
+| Caching | ✅ In-memory + Redis (zero-dep RESP protocol) |
+| Auth | ✅ Register, login, refresh, logout, email verification, password reset, MFA/TOTP, OAuth2, API keys, password policy |
+| Containerization | ✅ Dockerfile (distroless), docker-compose, Kubernetes, Helm |
 | Observability | ✅ Structured logs, Prometheus metrics, OpenTelemetry traces, alerting hooks |
-| API Docs | ✅ OpenAPI 3.1 spec |
-| Caching | ❌ None |
+| API Docs | ✅ OpenAPI 3.1 spec + Postman collection |
+| i18n | ✅ 5 languages, Accept-Language negotiation |
 | Events | ✅ Domain events, event bus, WebSocket, SSE, webhooks, job queue |
 
 ---

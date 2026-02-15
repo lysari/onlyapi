@@ -2,6 +2,7 @@ import type { Logger } from "../core/ports/logger.js";
 import type { TokenPayload } from "../core/ports/token-service.js";
 import type { RequestId } from "../core/types/brand.js";
 import type { TraceContext } from "../infrastructure/tracing/trace-context.js";
+import type { I18nContext } from "./i18n/index.js";
 
 /**
  * Typed request context threaded through the middleware pipeline.
@@ -18,4 +19,8 @@ export interface RequestContext {
   readonly trace: TraceContext;
   /** Request-scoped logger with requestId pre-bound */
   readonly logger: Logger;
+  /** API version resolved from URL path or Accept-Version header */
+  readonly apiVersion: "v1" | "v2";
+  /** i18n context with locale-bound translation function */
+  readonly i18n: I18nContext;
 }

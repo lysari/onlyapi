@@ -1,0 +1,8 @@
+# Namespace for onlyApi resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: onlyapi
+  labels:
+    app.kubernetes.io/name: onlyapi
+    app.kubernetes.io/part-of: onlyapi

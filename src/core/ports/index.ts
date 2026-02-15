@@ -59,3 +59,4 @@ export type {
 } from "./webhook.js";
 export type { Job, JobHandler, SubmitJobOptions, JobQueue, JobQueueStats } from "./job-queue.js";
 export { JobStatus } from "./job-queue.js";
+export type { Cache } from "./cache.js";

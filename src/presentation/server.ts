@@ -7,7 +7,9 @@ import { formatAccessLog, formatCorsRejectLog, formatRateLimitLog } from "../sha
 import { generateId } from "../shared/utils/id.js";
 import type { RequestContext } from "./context.js";
 import type { WebSocketManager, WsConnectionData } from "./handlers/websocket.handler.js";
+import { createI18nContext } from "./i18n/index.js";
 import { securityHeaders } from "./middleware/security-headers.js";
+import { addVersionHeaders, normalizeVersionedPath } from "./middleware/versioning.js";
 import type { Router } from "./routes/router.js";
 
 interface ServerDeps {
@@ -207,6 +209,13 @@ export const createServer = (deps: ServerDeps) => {
 
     // ── Route & handle ──
     const trace = resolveTraceContext(req.headers.get("traceparent"));
+
+    // API versioning — normalize /api/v2/... → /api/v1/... for handler lookup
+    const { normalized: routePath, version: apiVersion } = normalizeVersionedPath(path);
+
+    // i18n — resolve locale from Accept-Language header
+    const i18n = createI18nContext(req, config.i18n.supportedLocales, config.i18n.defaultLocale);
+
     const ctx: RequestContext = {
       requestId: brand<string, "RequestId">(requestId),
       startTime: shouldLog ? performance.now() : 0,
@@ -215,6 +224,8 @@ export const createServer = (deps: ServerDeps) => {
       path,
       trace,
       logger: logger.child({ requestId, traceId: trace.traceId, spanId: trace.spanId }),
+      apiVersion,
+      i18n,
     };
 
     // Track active connections
@@ -222,7 +233,7 @@ export const createServer = (deps: ServerDeps) => {
 
     let response: Response;
     try {
-      response = await router.handle(req, ctx, path);
+      response = await router.handle(req, ctx, routePath);
     } catch (e: unknown) {
       metrics.httpActiveConnections.dec();
       metrics.httpErrorsTotal.inc({ method, status: "500" });
@@ -283,6 +294,14 @@ export const createServer = (deps: ServerDeps) => {
     resHeaders.set("X-RateLimit-Remaining", String(rlMax - rlEntry.count));
     resHeaders.set("X-RateLimit-Reset", String(Math.ceil(rlEntry.resetAt / 1000)));
     resHeaders.set("traceparent", formatTraceparent(trace));
+    resHeaders.set("Content-Language", i18n.locale);
+
+    // API version headers (deprecation for v1)
+    addVersionHeaders(
+      response,
+      apiVersion,
+      apiVersion === "v1" ? path.replace("/v1/", "/v2/") : undefined,
+    );
 
     for (const [k, v] of secHeaderEntries) resHeaders.set(k, v);
 

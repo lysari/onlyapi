@@ -42,3 +42,17 @@ export {
 } from "./events/index.js";
 export { createInMemoryWebhookRegistry } from "./events/in-memory-webhook-registry.js";
 export { createInMemoryJobQueue } from "./jobs/index.js";
+export {
+  createPgUserRepository,
+  createPgTokenBlacklist,
+  createPgAccountLockout,
+  createPgAuditLog,
+  createPgVerificationTokenRepo,
+  createPgRefreshTokenStore,
+  createPgApiKeyRepository,
+  createPgPasswordHistory,
+  createPgOAuthAccountRepo,
+  pgMigrateUp,
+  pgMigrateDown,
+} from "./database/index.js";
+export { createInMemoryCache, createRedisCache } from "./cache/index.js";

@@ -9,3 +9,4 @@ export {
 export { authenticate, authorise } from "./auth.js";
 export { validateBody } from "./validate.js";
 export { authenticateApiKey } from "./api-key.js";
+export { addVersionHeaders, resolveApiVersion, normalizeVersionedPath } from "./versioning.js";

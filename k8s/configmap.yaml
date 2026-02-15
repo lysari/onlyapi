@@ -1,0 +1,24 @@
+# ConfigMap for non-secret environment configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: onlyapi-config
+  namespace: onlyapi
+  labels:
+    app.kubernetes.io/name: onlyapi
+data:
+  NODE_ENV: "production"
+  HOST: "0.0.0.0"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  DATABASE_DRIVER: "postgres"
+  CACHE_DRIVER: "redis"
+  REDIS_ENABLED: "true"
+  REDIS_HOST: "redis-svc"
+  REDIS_PORT: "6379"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX: "100"
+  CORS_ORIGINS: "*"
+  I18N_DEFAULT_LOCALE: "en"
+  I18N_SUPPORTED_LOCALES: "en,es,fr,de,ja"

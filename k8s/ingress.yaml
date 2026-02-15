@@ -1,0 +1,36 @@
+# Ingress — TLS-terminated external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: onlyapi-ingress
+  namespace: onlyapi
+  labels:
+    app.kubernetes.io/name: onlyapi
+  annotations:
+    # nginx ingress controller
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # cert-manager
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.example.com
+      secretName: onlyapi-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: onlyapi-svc
+                port:
+                  number: 80

@@ -34,8 +34,28 @@ const configSchema = z.object({
   }),
 
   database: z.object({
-    url: z.string().url().optional(),
+    driver: z.enum(["sqlite", "postgres"]).default("sqlite"),
+    url: z.string().optional(),
     path: z.string().default("data/onlyapi.sqlite"),
+  }),
+
+  redis: z.object({
+    enabled: z
+      .enum(["true", "false"])
+      .transform((v) => v === "true")
+      .default("false"),
+    host: z.string().default("127.0.0.1"),
+    port: z.coerce.number().int().min(1).max(65535).default(6379),
+    password: z.string().optional(),
+    db: z.coerce.number().int().min(0).max(15).default(0),
+  }),
+
+  i18n: z.object({
+    defaultLocale: z.string().default("en"),
+    supportedLocales: z
+      .string()
+      .transform((s) => s.split(",").map((l) => l.trim()))
+      .default("en"),
   }),
 
   lockout: z.object({
@@ -110,8 +130,20 @@ export const loadConfig = (): AppConfig => {
       format: Bun.env["LOG_FORMAT"],
     },
     database: {
+      driver: Bun.env["DATABASE_DRIVER"],
       url: Bun.env["DATABASE_URL"],
       path: Bun.env["DATABASE_PATH"],
+    },
+    redis: {
+      enabled: Bun.env["REDIS_ENABLED"],
+      host: Bun.env["REDIS_HOST"],
+      port: Bun.env["REDIS_PORT"],
+      password: Bun.env["REDIS_PASSWORD"],
+      db: Bun.env["REDIS_DB"],
+    },
+    i18n: {
+      defaultLocale: Bun.env["I18N_DEFAULT_LOCALE"],
+      supportedLocales: Bun.env["I18N_SUPPORTED_LOCALES"],
     },
     lockout: {
       maxAttempts: Bun.env["LOCKOUT_MAX_ATTEMPTS"],

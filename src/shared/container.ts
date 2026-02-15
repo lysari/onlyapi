@@ -61,4 +61,5 @@ export const Tokens = {
   JobQueue: Symbol.for("JobQueue"),
   WebSocketManager: Symbol.for("WebSocketManager"),
   SseHandler: Symbol.for("SseHandler"),
+  Cache: Symbol.for("Cache"),
 } as const;

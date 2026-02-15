@@ -1,0 +1,58 @@
+# Pod Disruption Budget — ensure at least 1 pod is always ready
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: onlyapi-pdb
+  namespace: onlyapi
+  labels:
+    app.kubernetes.io/name: onlyapi
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: onlyapi
+      app.kubernetes.io/component: api
+---
+# NetworkPolicy — restrict egress/ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: onlyapi-network
+  namespace: onlyapi
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: onlyapi
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - port: 3000
+          protocol: TCP
+  egress:
+    # Allow DNS
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow Postgres
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Allow Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - port: 6379
+          protocol: TCP

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: onlyapi
+description: A gold-standard API starter — Bun, TypeScript, clean architecture
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+keywords:
+  - api
+  - bun
+  - typescript
+  - rest
+  - hexagonal-architecture
+home: https://github.com/onlyapi/onlyapi
+sources:
+  - https://github.com/onlyapi/onlyapi
+maintainers:
+  - name: onlyApi team

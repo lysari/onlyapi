@@ -9,3 +9,16 @@ export { createSqliteApiKeyRepository } from "./sqlite-api-keys.js";
 export { createSqlitePasswordHistory } from "./sqlite-password-history.js";
 export { createSqliteOAuthAccountRepo } from "./sqlite-oauth-accounts.js";
 export { migrateUp, migrateDown } from "./migrations/runner.js";
+export {
+  createPgUserRepository,
+  createPgTokenBlacklist,
+  createPgAccountLockout,
+  createPgAuditLog,
+  createPgVerificationTokenRepo,
+  createPgRefreshTokenStore,
+  createPgApiKeyRepository,
+  createPgPasswordHistory,
+  createPgOAuthAccountRepo,
+  pgMigrateUp,
+  pgMigrateDown,
+} from "./postgres/index.js";

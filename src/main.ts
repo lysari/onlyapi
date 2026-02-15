@@ -7,11 +7,26 @@ import { createAuthService } from "./application/services/auth.service.js";
 import { createHealthService } from "./application/services/health.service.js";
 import { createUserService } from "./application/services/user.service.js";
 import { AlertLevel } from "./core/ports/alert-sink.js";
+import type { Cache } from "./core/ports/cache.js";
 import { CircuitState } from "./core/ports/circuit-breaker.js";
 import type { OAuthProvider } from "./core/ports/oauth.js";
 import { createNoopAlertSink, createWebhookAlertSink } from "./infrastructure/alerting/webhook.js";
+import { createInMemoryCache } from "./infrastructure/cache/in-memory-cache.js";
+import { createRedisCache } from "./infrastructure/cache/redis-cache.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { migrateUp } from "./infrastructure/database/migrations/runner.js";
+import {
+  createPgAccountLockout,
+  createPgApiKeyRepository,
+  createPgAuditLog,
+  createPgOAuthAccountRepo,
+  createPgPasswordHistory,
+  createPgRefreshTokenStore,
+  createPgTokenBlacklist,
+  createPgUserRepository,
+  createPgVerificationTokenRepo,
+  pgMigrateUp,
+} from "./infrastructure/database/postgres/index.js";
 import { createSqliteAccountLockout } from "./infrastructure/database/sqlite-account-lockout.js";
 import { createSqliteApiKeyRepository } from "./infrastructure/database/sqlite-api-keys.js";
 import { createSqliteAuditLog } from "./infrastructure/database/sqlite-audit-log.js";
@@ -56,42 +71,99 @@ const bootstrap = async () => {
   const passwordHasher = createPasswordHasher();
   const tokenService = createTokenService(config.jwt);
 
-  // 3. Database — SQLite (zero deps, bun:sqlite built-in)
-  const dbPath = config.database.path;
-  const dbDir = dirname(dbPath);
-  if (!existsSync(dbDir)) {
-    mkdirSync(dbDir, { recursive: true });
+  // 3. Database — driver-based adapter selection
+  let db: Database | undefined;
+  // biome-ignore lint/suspicious/noExplicitAny: Bun.sql tagged template type
+  let pgSql: any | undefined;
+  let userRepo: ReturnType<typeof createSqliteUserRepository>;
+  let tokenBlacklist: ReturnType<typeof createSqliteTokenBlacklist>;
+  let accountLockout: ReturnType<typeof createSqliteAccountLockout>;
+  let auditLog: ReturnType<typeof createSqliteAuditLog>;
+  let verificationTokens: ReturnType<typeof createSqliteVerificationTokenRepo>;
+  let refreshTokenStore: ReturnType<typeof createSqliteRefreshTokenStore>;
+  let apiKeyRepo: ReturnType<typeof createSqliteApiKeyRepository>;
+  let passwordHistory: ReturnType<typeof createSqlitePasswordHistory>;
+  let oauthAccounts: ReturnType<typeof createSqliteOAuthAccountRepo>;
+
+  if (config.database.driver === "postgres") {
+    // Postgres via Bun.sql (zero-dep, native driver)
+    const dbUrl = config.database.url;
+    if (!dbUrl) {
+      logger.fatal("DATABASE_URL is required when DATABASE_DRIVER=postgres");
+      process.exit(1);
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: Bun.sql dynamic URL config
+    pgSql = new (Bun as any).SQL({ url: dbUrl });
+    logger.info("Postgres database connecting", { url: dbUrl.replace(/:[^:@]+@/, ":***@") });
+
+    await pgMigrateUp(pgSql, logger);
+
+    userRepo = createPgUserRepository(pgSql);
+    tokenBlacklist = createPgTokenBlacklist(pgSql);
+    accountLockout = createPgAccountLockout(pgSql, {
+      maxAttempts: config.lockout.maxAttempts,
+      lockoutDurationMs: config.lockout.durationMs,
+    });
+    auditLog = createPgAuditLog(pgSql);
+    verificationTokens = createPgVerificationTokenRepo(pgSql);
+    refreshTokenStore = createPgRefreshTokenStore(pgSql);
+    apiKeyRepo = createPgApiKeyRepository(pgSql);
+    passwordHistory = createPgPasswordHistory(pgSql);
+    oauthAccounts = createPgOAuthAccountRepo(pgSql);
+    logger.info("Postgres adapters initialized");
+  } else {
+    // SQLite (default — zero deps, bun:sqlite built-in)
+    const dbPath = config.database.path;
+    const dbDir = dirname(dbPath);
+    if (!existsSync(dbDir)) {
+      mkdirSync(dbDir, { recursive: true });
+    }
+    db = new Database(dbPath, { create: true });
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+    db.exec("PRAGMA foreign_keys = ON");
+    logger.info("SQLite database opened", { path: dbPath });
+
+    await migrateUp(db, logger);
+
+    userRepo = createSqliteUserRepository(db);
+    tokenBlacklist = createSqliteTokenBlacklist(db);
+    accountLockout = createSqliteAccountLockout(db, {
+      maxAttempts: config.lockout.maxAttempts,
+      lockoutDurationMs: config.lockout.durationMs,
+    });
+    auditLog = createSqliteAuditLog(db);
+    verificationTokens = createSqliteVerificationTokenRepo(db);
+    refreshTokenStore = createSqliteRefreshTokenStore(db);
+    apiKeyRepo = createSqliteApiKeyRepository(db);
+    passwordHistory = createSqlitePasswordHistory(db);
+    oauthAccounts = createSqliteOAuthAccountRepo(db);
   }
-  const db = new Database(dbPath, { create: true });
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA synchronous = NORMAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  logger.info("SQLite database opened", { path: dbPath });
 
-  // 4. Run migrations
-  await migrateUp(db, logger);
+  // 4. Cache — driver-based adapter selection
+  let cache: Cache;
 
-  // 5. Repositories & services backed by SQLite
-  const userRepo = createSqliteUserRepository(db);
-  const tokenBlacklist = createSqliteTokenBlacklist(db);
-  const accountLockout = createSqliteAccountLockout(db, {
-    maxAttempts: config.lockout.maxAttempts,
-    lockoutDurationMs: config.lockout.durationMs,
-  });
-  const auditLog = createSqliteAuditLog(db);
+  if (config.redis.enabled) {
+    cache = await createRedisCache({
+      config: {
+        host: config.redis.host,
+        port: config.redis.port,
+        password: config.redis.password,
+        db: config.redis.db,
+      },
+      logger: logger.child({ service: "redis" }),
+    });
+    logger.info("Redis cache connected", { host: config.redis.host, port: config.redis.port });
+  } else {
+    cache = createInMemoryCache();
+    logger.info("In-memory cache initialized");
+  }
 
-  // 5b. v1.4 — Auth platform repositories
-  const verificationTokens = createSqliteVerificationTokenRepo(db);
-  const refreshTokenStore = createSqliteRefreshTokenStore(db);
-  const apiKeyRepo = createSqliteApiKeyRepository(db);
-  const passwordHistory = createSqlitePasswordHistory(db);
-  const oauthAccounts = createSqliteOAuthAccountRepo(db);
-
-  // 5c. v1.4 — Security services
+  // 5. Security services
   const totpService = createTotpService();
   const passwordPolicy = createPasswordPolicy(config.passwordPolicy);
 
-  // 5d. v1.4 — OAuth providers (only registered when configured)
+  // 5a. OAuth providers (only registered when configured)
   const oauthProviders = new Map<string, OAuthProvider>();
   if (config.oauth.googleClientId && config.oauth.googleClientSecret) {
     oauthProviders.set(
@@ -114,7 +186,7 @@ const bootstrap = async () => {
     logger.info("OAuth provider registered: github");
   }
 
-  // 5e. v1.5 — Event system, webhooks, job queue
+  // 5b. Event system, webhooks, job queue
   const eventBus = createEventBus({ logger: logger.child({ service: "event-bus" }) });
   const eventFactory = createDomainEventFactory();
   const webhookRegistry = createInMemoryWebhookRegistry();
@@ -148,18 +220,21 @@ const bootstrap = async () => {
   Container.register(Tokens.OAuthProviders, oauthProviders);
   Container.register(Tokens.OAuthAccountRepository, oauthAccounts);
 
-  // 6b. v1.5 — Event, webhook, and job queue registrations
+  // 6b. Cache
+  Container.register(Tokens.Cache, cache);
+
+  // 6c. Event, webhook, and job queue registrations
   Container.register(Tokens.EventBus, eventBus);
   Container.register(Tokens.EventFactory, eventFactory);
   Container.register(Tokens.WebhookRegistry, webhookRegistry);
   Container.register(Tokens.WebhookDispatcher, webhookDispatcher);
   Container.register(Tokens.JobQueue, jobQueue);
 
-  // 6c. Observability — metrics collector
+  // 6d. Observability — metrics collector
   const metricsCollector = createMetricsCollector();
   Container.register(Tokens.MetricsCollector, metricsCollector);
 
-  // 6c. Alerting — webhook alert sink (or noop if no URL configured)
+  // 6e. Alerting — webhook alert sink (or noop if no URL configured)
   const alertSink = config.alerting.webhookUrl
     ? createWebhookAlertSink({
         url: config.alerting.webhookUrl,
@@ -169,7 +244,7 @@ const bootstrap = async () => {
     : createNoopAlertSink();
   Container.register(Tokens.AlertSink, alertSink);
 
-  // 6d. Resilience — circuit breaker for database operations
+  // 6f. Resilience — circuit breaker for database operations
   const dbCircuitBreaker = createCircuitBreaker({
     name: "database",
     failureThreshold: config.circuitBreaker.failureThreshold,
@@ -236,7 +311,7 @@ const bootstrap = async () => {
 
   const healthService = createHealthService({
     logger: logger.child({ service: "health" }),
-    version: "1.5.0",
+    version: "2.0.0",
     circuitBreakers: [dbCircuitBreaker],
   });
 
@@ -324,7 +399,8 @@ const bootstrap = async () => {
     clearInterval(pruneInterval);
     jobQueue.stop();
     srv.flush(); // flush buffered access logs before exit
-    db.close(); // close SQLite connection
+    if (db) db.close(); // close SQLite connection
+    cache.close(); // close cache (no-op for in-memory, QUIT for Redis)
     printShutdown(signal);
     instance.stop();
     process.exit(0);
