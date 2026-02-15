@@ -38,7 +38,7 @@
 - **Clean Architecture** — Domain → Application → Infrastructure → Presentation
 - **Strictest TypeScript** — 22+ compiler flags, branded types, `Result<T,E>` monad (no `throw`)
 - **Security-first** — Argon2id (Bun-native), HMAC-SHA256 JWT (Web Crypto API), CORS, rate-limiting, security headers
-- **246 tests** — unit + integration, all passing
+- **282 tests** — unit + integration, all passing
 
 ## Architecture
 
@@ -183,6 +183,11 @@ WORKERS=8 bun run start:cluster
 | `POST` | `/api/v1/api-keys` | Bearer | Create API key |
 | `GET` | `/api/v1/api-keys` | Bearer | List API keys |
 | `DELETE` | `/api/v1/api-keys/:id` | Bearer | Revoke API key |
+| `POST` | `/api/v1/webhooks` | Admin | Create webhook subscription |
+| `GET` | `/api/v1/webhooks` | Admin | List webhook subscriptions |
+| `DELETE` | `/api/v1/webhooks/:id` | Admin | Remove webhook subscription |
+| `GET` | `/api/v1/events/stream` | Bearer | SSE real-time event stream |
+| `WS` | `/ws` | JWT | WebSocket real-time connection |
 
 ### Example
 
@@ -279,7 +284,7 @@ Benchmarked on MacBook Pro (Intel i7-9750H, 12 threads) with [bombardier](https:
 ## Testing
 
 ```bash
-# Run all tests (246 tests across 28 files)
+# Run all tests (282 tests across 32 files)
 bun test
 
 # Watch mode
@@ -290,8 +295,8 @@ bun test tests/unit/result.test.ts
 ```
 
 Tests cover:
-- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository, TOTP, password policy, API keys, refresh tokens, verification tokens, OAuth accounts, password history, migrations, account lockout
-- **Integration**: Full HTTP request lifecycle (health, auth flow, email verification, MFA, API keys, password policy, error handling, CORS)
+- **Unit**: Result monad, AppError, PasswordHasher, TokenService, UserRepository, TOTP, password policy, API keys, refresh tokens, verification tokens, OAuth accounts, password history, migrations, account lockout, event bus, event factory, webhook registry, job queue
+- **Integration**: Full HTTP request lifecycle (health, auth flow, email verification, MFA, API keys, password policy, webhooks, SSE, error handling, CORS)
 
 ## Roadmap
 
@@ -338,12 +343,12 @@ Tests cover:
 
 ### v1.5 — Real-time & Events
 
-- [ ] **WebSocket support** — Bun-native WebSocket upgrade in `Bun.serve()`
-- [ ] **Server-Sent Events (SSE)** — streaming endpoint for real-time updates
-- [ ] **Domain events** — `UserRegistered`, `UserDeleted`, `LoginFailed` event emitter
-- [ ] **Event bus port** — pluggable adapter (in-memory → Redis Pub/Sub → NATS)
-- [ ] **Webhooks** — outbound HTTP notifications on domain events
-- [ ] **Background job queue** — async task processing with retry
+- [x] **WebSocket support** — Bun-native WebSocket upgrade in `Bun.serve()`
+- [x] **Server-Sent Events (SSE)** — streaming endpoint for real-time updates
+- [x] **Domain events** — `UserRegistered`, `UserDeleted`, `LoginFailed` event emitter
+- [x] **Event bus port** — pluggable adapter (in-memory → Redis Pub/Sub → NATS)
+- [x] **Webhooks** — outbound HTTP notifications on domain events
+- [x] **Background job queue** — async task processing with retry
 
 ### v2.0 — Scale & Ecosystem
 
@@ -366,7 +371,7 @@ Tests cover:
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
 | Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
-| Testing | ✅ 246 tests (unit + integration) |
+| Testing | ✅ 282 tests (unit + integration) |
 | CI/CD | ✅ GitHub Actions (lint → check → test → build) |
 | Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
 | Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout, email verification, password reset, MFA/TOTP, OAuth2 (Google + GitHub), API keys, password policy |
@@ -374,7 +379,7 @@ Tests cover:
 | Observability | ✅ Structured logs, Prometheus metrics, OpenTelemetry traces, alerting hooks |
 | API Docs | ✅ OpenAPI 3.1 spec |
 | Caching | ❌ None |
-| Events | ❌ None |
+| Events | ✅ Domain events, event bus, WebSocket, SSE, webhooks, job queue |
 
 ---
 

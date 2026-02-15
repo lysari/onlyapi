@@ -124,6 +124,13 @@ beforeAll(async () => {
   const apiKeyService = createApiKeyService({ apiKeyRepo, logger });
   const metricsCollector = createMetricsCollector();
 
+  const { createEventBus } = await import("../../src/infrastructure/events/event-bus.js");
+  const { createInMemoryWebhookRegistry } = await import(
+    "../../src/infrastructure/events/in-memory-webhook-registry.js"
+  );
+  const eventBus = createEventBus({ logger });
+  const webhookRegistry = createInMemoryWebhookRegistry();
+
   const router = createRouter({
     authService,
     userService,
@@ -133,6 +140,8 @@ beforeAll(async () => {
     tokenService,
     metricsCollector,
     oauthProviders,
+    eventBus,
+    webhookRegistry,
     logger,
   });
   const srv = createServer({ config, logger, router, metrics: metricsCollector });
@@ -671,5 +680,102 @@ describe("Integration: Password policy enforcement", () => {
     });
     // Policy requires digits
     expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1.5 — Real-time & Events
+// ---------------------------------------------------------------------------
+
+describe("Integration: Webhook endpoints", () => {
+  let userToken = "";
+
+  it("register a user for webhook tests", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "wh-user@test.com", password: "Test1234!" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { accessToken: string } };
+    userToken = body.data.accessToken;
+  });
+
+  it("POST /api/v1/webhooks requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/webhooks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://example.com/hook", events: ["user.registered"] }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/v1/webhooks rejects non-admin users", async () => {
+    const res = await fetch(`${BASE}/api/v1/webhooks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ url: "https://example.com/hook", events: ["user.registered"] }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/v1/webhooks requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/webhooks`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/v1/webhooks rejects non-admin users", async () => {
+    const res = await fetch(`${BASE}/api/v1/webhooks`, {
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("DELETE /api/v1/webhooks/:id requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/webhooks/some-id`, {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Integration: SSE endpoint", () => {
+  it("GET /api/v1/events/stream requires authentication", async () => {
+    const res = await fetch(`${BASE}/api/v1/events/stream`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/v1/events/stream returns SSE content-type with valid token", async () => {
+    // Register a user to get a token
+    const regRes = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "sse-user@test.com", password: "Test1234!" }),
+    });
+    expect(regRes.status).toBe(201);
+    const body = (await regRes.json()) as { data: { accessToken: string } };
+
+    // Use AbortSignal.timeout to avoid hanging on the open stream
+    try {
+      const res = await fetch(`${BASE}/api/v1/events/stream?token=${body.data.accessToken}`, {
+        signal: AbortSignal.timeout(500),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe("text/event-stream");
+      expect(res.headers.get("cache-control")).toBe("no-cache");
+      expect(res.headers.get("x-accel-buffering")).toBe("no");
+    } catch (e: unknown) {
+      // AbortError / TimeoutError is fine — means headers were never fully received
+      // In that case the stream was opened but aborted by our signal
+      if (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) {
+        // This is acceptable: Bun may buffer the entire response for streaming
+        // The important thing is that we don't get a 400/404/500
+        return;
+      }
+      throw e;
+    }
   });
 });

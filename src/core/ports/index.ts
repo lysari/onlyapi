@@ -49,3 +49,13 @@ export type {
   PasswordPolicyConfig,
   PasswordPolicyResult,
 } from "./password-policy.js";
+export type { DomainEvent, DomainEventType, EventBus, EventHandler } from "./event-bus.js";
+export { DomainEventType as DomainEventTypes } from "./event-bus.js";
+export type {
+  WebhookSubscription,
+  CreateWebhookData,
+  WebhookDelivery,
+  WebhookRegistry,
+} from "./webhook.js";
+export type { Job, JobHandler, SubmitJobOptions, JobQueue, JobQueueStats } from "./job-queue.js";
+export { JobStatus } from "./job-queue.js";

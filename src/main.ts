@@ -21,6 +21,11 @@ import { createSqliteRefreshTokenStore } from "./infrastructure/database/sqlite-
 import { createSqliteTokenBlacklist } from "./infrastructure/database/sqlite-token-blacklist.js";
 import { createSqliteUserRepository } from "./infrastructure/database/sqlite-user.repository.js";
 import { createSqliteVerificationTokenRepo } from "./infrastructure/database/sqlite-verification-tokens.js";
+import { createEventBus } from "./infrastructure/events/event-bus.js";
+import { createDomainEventFactory } from "./infrastructure/events/event-factory.js";
+import { createInMemoryWebhookRegistry } from "./infrastructure/events/in-memory-webhook-registry.js";
+import { createWebhookDispatcher } from "./infrastructure/events/webhook-dispatcher.js";
+import { createInMemoryJobQueue } from "./infrastructure/jobs/job-queue.js";
 import { createLogger } from "./infrastructure/logging/logger.js";
 import { createMetricsCollector } from "./infrastructure/metrics/prometheus.js";
 import { createGitHubOAuthProvider } from "./infrastructure/oauth/github.js";
@@ -30,6 +35,7 @@ import { createPasswordHasher } from "./infrastructure/security/password-hasher.
 import { createPasswordPolicy } from "./infrastructure/security/password-policy.js";
 import { createTokenService } from "./infrastructure/security/token-service.js";
 import { createTotpService } from "./infrastructure/security/totp-service.js";
+import { createWebSocketManager } from "./presentation/handlers/websocket.handler.js";
 import { createRouter } from "./presentation/routes/router.js";
 import { createServer } from "./presentation/server.js";
 import { printShutdown, printStartupBanner } from "./shared/cli.js";
@@ -108,6 +114,21 @@ const bootstrap = async () => {
     logger.info("OAuth provider registered: github");
   }
 
+  // 5e. v1.5 — Event system, webhooks, job queue
+  const eventBus = createEventBus({ logger: logger.child({ service: "event-bus" }) });
+  const eventFactory = createDomainEventFactory();
+  const webhookRegistry = createInMemoryWebhookRegistry();
+  const webhookDispatcher = createWebhookDispatcher({
+    registry: webhookRegistry,
+    logger: logger.child({ service: "webhook" }),
+  });
+  const jobQueue = createInMemoryJobQueue({
+    logger: logger.child({ service: "job-queue" }),
+  });
+
+  // Wire webhook dispatcher as a wildcard event subscriber
+  eventBus.subscribeAll((event) => webhookDispatcher.dispatch(event));
+
   // 6. Register in DI container
   Container.register(Tokens.Logger, logger);
   Container.register(Tokens.Config, config);
@@ -127,7 +148,14 @@ const bootstrap = async () => {
   Container.register(Tokens.OAuthProviders, oauthProviders);
   Container.register(Tokens.OAuthAccountRepository, oauthAccounts);
 
-  // 6b. Observability — metrics collector
+  // 6b. v1.5 — Event, webhook, and job queue registrations
+  Container.register(Tokens.EventBus, eventBus);
+  Container.register(Tokens.EventFactory, eventFactory);
+  Container.register(Tokens.WebhookRegistry, webhookRegistry);
+  Container.register(Tokens.WebhookDispatcher, webhookDispatcher);
+  Container.register(Tokens.JobQueue, jobQueue);
+
+  // 6c. Observability — metrics collector
   const metricsCollector = createMetricsCollector();
   Container.register(Tokens.MetricsCollector, metricsCollector);
 
@@ -208,7 +236,7 @@ const bootstrap = async () => {
 
   const healthService = createHealthService({
     logger: logger.child({ service: "health" }),
-    version: "1.4.0",
+    version: "1.5.0",
     circuitBreakers: [dbCircuitBreaker],
   });
 
@@ -239,12 +267,27 @@ const bootstrap = async () => {
     tokenService,
     metricsCollector,
     oauthProviders,
+    eventBus,
+    webhookRegistry,
     logger,
   });
-  const srv = createServer({ config, logger, router, metrics: metricsCollector });
+
+  // 8b. WebSocket manager
+  const wsManager = createWebSocketManager({
+    tokenService,
+    eventBus,
+    logger: logger.child({ service: "websocket" }),
+  });
+  Container.register(Tokens.WebSocketManager, wsManager);
+
+  // Wire WebSocket manager as event subscriber (broadcast to WS clients)
+  eventBus.subscribeAll((event) => wsManager.broadcast(event));
+
+  const srv = createServer({ config, logger, router, metrics: metricsCollector, wsManager });
 
   // 9. Start
   const instance = srv.start();
+  jobQueue.start();
 
   // 10. Print startup banner
   const isCluster = Bun.env["WORKER_ID"] !== undefined;
@@ -279,6 +322,7 @@ const bootstrap = async () => {
   // 12. Graceful shutdown
   const shutdown = (signal: string) => {
     clearInterval(pruneInterval);
+    jobQueue.stop();
     srv.flush(); // flush buffered access logs before exit
     db.close(); // close SQLite connection
     printShutdown(signal);

@@ -3,10 +3,12 @@ import type { ApiKeyService } from "../../application/services/api-key.service.j
 import type { AuthService } from "../../application/services/auth.service.js";
 import type { HealthService } from "../../application/services/health.service.js";
 import type { UserService } from "../../application/services/user.service.js";
+import type { EventBus } from "../../core/ports/event-bus.js";
 import type { Logger } from "../../core/ports/logger.js";
 import type { MetricsCollector } from "../../core/ports/metrics.js";
 import type { OAuthProvider } from "../../core/ports/oauth.js";
 import type { TokenService } from "../../core/ports/token-service.js";
+import type { WebhookRegistry } from "../../core/ports/webhook.js";
 import type { RequestContext } from "../context.js";
 import { adminHandlers } from "../handlers/admin.handler.js";
 import { apiKeyHandlers } from "../handlers/api-key.handler.js";
@@ -15,7 +17,9 @@ import { healthHandler } from "../handlers/health.handler.js";
 import { metricsHandler } from "../handlers/metrics.handler.js";
 import { oauthHandlers } from "../handlers/oauth.handler.js";
 import { openApiHandler } from "../handlers/openapi.handler.js";
+import { createSseHandler } from "../handlers/sse.handler.js";
 import { userHandlers } from "../handlers/user.handler.js";
+import { webhookHandlers } from "../handlers/webhook.handler.js";
 
 /**
  * Zero-alloc radix-style router.
@@ -33,6 +37,8 @@ interface RouterDeps {
   readonly tokenService: TokenService;
   readonly metricsCollector: MetricsCollector;
   readonly oauthProviders: ReadonlyMap<string, OAuthProvider>;
+  readonly eventBus: EventBus;
+  readonly webhookRegistry: WebhookRegistry;
   readonly logger: Logger;
 }
 
@@ -42,6 +48,8 @@ const ADMIN_PREFIX = "/api/v1/admin/users/";
 const API_KEY_PREFIX = "/api/v1/api-keys/";
 /** OAuth route prefix */
 const OAUTH_PREFIX = "/api/v1/auth/oauth/";
+/** Webhook route prefix for parametric matching */
+const WEBHOOK_PREFIX = "/api/v1/webhooks/";
 
 export const createRouter = (deps: RouterDeps) => {
   const { logger } = deps;
@@ -71,6 +79,16 @@ export const createRouter = (deps: RouterDeps) => {
     deps.oauthProviders,
     logger.child({ layer: "handler", handler: "oauth" }),
   );
+  const webhooks = webhookHandlers(
+    deps.webhookRegistry,
+    deps.tokenService,
+    logger.child({ layer: "handler", handler: "webhook" }),
+  );
+  const sse = createSseHandler({
+    tokenService: deps.tokenService,
+    eventBus: deps.eventBus,
+    logger: logger.child({ layer: "handler", handler: "sse" }),
+  });
   const docs = openApiHandler();
   const metrics = metricsHandler(deps.metricsCollector);
 
@@ -116,6 +134,13 @@ export const createRouter = (deps: RouterDeps) => {
     // API Keys — v1.4
     ["POST /api/v1/api-keys", apiKeys.create],
     ["GET /api/v1/api-keys", apiKeys.list],
+
+    // Webhooks — v1.5
+    ["POST /api/v1/webhooks", webhooks.create],
+    ["GET /api/v1/webhooks", webhooks.list],
+
+    // SSE — v1.5
+    ["GET /api/v1/events/stream", (req, ctx) => sse.stream(req, ctx)],
 
     // Admin — list endpoint (no userId param)
     ["GET /api/v1/admin/users", admin.listUsers],
@@ -207,6 +232,19 @@ export const createRouter = (deps: RouterDeps) => {
     return null;
   };
 
+  /**
+   * Match parametric webhook routes: DELETE /api/v1/webhooks/:id
+   */
+  const matchWebhook = (
+    method: string,
+    path: string,
+  ): ((req: Request, ctx: RequestContext) => Promise<Response>) | null => {
+    if (method !== "DELETE" || !path.startsWith(WEBHOOK_PREFIX)) return null;
+    const webhookId = path.substring(WEBHOOK_PREFIX.length);
+    if (!webhookId || webhookId.includes("/")) return null;
+    return (req, ctx) => webhooks.remove(req, ctx, webhookId);
+  };
+
   return {
     handle(req: Request, ctx: RequestContext, path: string): Promise<Response> {
       // 1. Try static routes first (O(1))
@@ -222,6 +260,9 @@ export const createRouter = (deps: RouterDeps) => {
 
       const oauthHandler = matchOAuth(req.method, path);
       if (oauthHandler) return oauthHandler(req, ctx);
+
+      const webhookHandler = matchWebhook(req.method, path);
+      if (webhookHandler) return webhookHandler(req, ctx);
 
       return Promise.resolve(notFound404(req.method, path));
     },

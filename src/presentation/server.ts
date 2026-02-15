@@ -6,6 +6,7 @@ import { formatTraceparent, resolveTraceContext } from "../infrastructure/tracin
 import { formatAccessLog, formatCorsRejectLog, formatRateLimitLog } from "../shared/log-format.js";
 import { generateId } from "../shared/utils/id.js";
 import type { RequestContext } from "./context.js";
+import type { WebSocketManager, WsConnectionData } from "./handlers/websocket.handler.js";
 import { securityHeaders } from "./middleware/security-headers.js";
 import type { Router } from "./routes/router.js";
 
@@ -14,6 +15,7 @@ interface ServerDeps {
   readonly logger: Logger;
   readonly router: Router;
   readonly metrics: MetricsCollector;
+  readonly wsManager?: WebSocketManager | undefined;
 }
 
 /**
@@ -31,7 +33,7 @@ const extractPath = (url: string): string => {
 };
 
 export const createServer = (deps: ServerDeps) => {
-  const { config, logger, router, metrics } = deps;
+  const { config, logger, router, metrics, wsManager } = deps;
 
   // ── Pre-compute EVERYTHING possible at boot, not per-request ──
 
@@ -193,6 +195,16 @@ export const createServer = (deps: ServerDeps) => {
       return new Response(rateLimitedBody, { status: 429, headers: h });
     }
 
+    // ── WebSocket upgrade ──
+    if (wsManager && path === "/ws" && method === "GET") {
+      const upgradeData = wsManager.handleUpgrade(req, ip);
+      if (upgradeData) {
+        const upgraded = server.upgrade(req, { data: upgradeData });
+        if (upgraded) return undefined as unknown as Response; // Bun handles the upgrade
+      }
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+
     // ── Route & handle ──
     const trace = resolveTraceContext(req.headers.get("traceparent"));
     const ctx: RequestContext = {
@@ -301,16 +313,41 @@ export const createServer = (deps: ServerDeps) => {
 
   return {
     start() {
-      const server = Bun.serve({
+      const baseConfig = {
         port: config.port,
         hostname: config.host,
         fetch: handleRequest,
         reusePort: true, // Enables SO_REUSEPORT — critical for multi-process scaling
-
-        // Limits
         maxRequestBodySize: 1_048_576, // 1 MiB
         idleTimeout: 30, // seconds
-      });
+      };
+
+      // biome-ignore lint/suspicious/noExplicitAny: Bun.serve overloads require different shapes with/without websocket
+      let server: ReturnType<typeof Bun.serve<any>>;
+
+      if (wsManager) {
+        const mgr = wsManager;
+        server = Bun.serve({
+          ...baseConfig,
+          websocket: {
+            open(ws: import("bun").ServerWebSocket<WsConnectionData>) {
+              mgr.onOpen(ws);
+            },
+            message(ws: import("bun").ServerWebSocket<WsConnectionData>, message: string | Buffer) {
+              mgr.onMessage(ws, message);
+            },
+            close(
+              ws: import("bun").ServerWebSocket<WsConnectionData>,
+              code: number,
+              reason: string,
+            ) {
+              mgr.onClose(ws, code, reason);
+            },
+          },
+        });
+      } else {
+        server = Bun.serve(baseConfig);
+      }
 
       // Banner is printed by main.ts / cluster.ts — no duplicate logging here
 

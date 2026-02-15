@@ -54,4 +54,11 @@ export const Tokens = {
   OAuthProviders: Symbol.for("OAuthProviders"),
   OAuthAccountRepository: Symbol.for("OAuthAccountRepository"),
   ApiKeyService: Symbol.for("ApiKeyService"),
+  EventBus: Symbol.for("EventBus"),
+  EventFactory: Symbol.for("EventFactory"),
+  WebhookRegistry: Symbol.for("WebhookRegistry"),
+  WebhookDispatcher: Symbol.for("WebhookDispatcher"),
+  JobQueue: Symbol.for("JobQueue"),
+  WebSocketManager: Symbol.for("WebSocketManager"),
+  SseHandler: Symbol.for("SseHandler"),
 } as const;

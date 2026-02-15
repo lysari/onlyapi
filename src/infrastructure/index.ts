@@ -35,3 +35,10 @@ export {
   type TraceContext,
 } from "./tracing/index.js";
 export { createGoogleOAuthProvider, createGitHubOAuthProvider } from "./oauth/index.js";
+export {
+  createEventBus,
+  createDomainEventFactory,
+  createWebhookDispatcher,
+} from "./events/index.js";
+export { createInMemoryWebhookRegistry } from "./events/in-memory-webhook-registry.js";
+export { createInMemoryJobQueue } from "./jobs/index.js";

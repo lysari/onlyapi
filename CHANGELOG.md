@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-02-16
+
+### Added
+
+- **WebSocket support** — Bun-native WebSocket upgrade at `/ws` with JSON protocol; authentication via JWT, pub/sub event subscriptions, broadcast domain events to connected clients; `WebSocketManager` with connection tracking, auth state, per-client event filtering
+- **Server-Sent Events (SSE)** — `GET /api/v1/events/stream` streaming endpoint for real-time updates; auth via `?token=` query param or `Authorization` header; event type filtering via `?events=` param; 30s heartbeat keep-alive; `X-Accel-Buffering: no` for Nginx compatibility
+- **Domain events** — 15 typed event types (`USER_REGISTERED`, `USER_DELETED`, `USER_UPDATED`, `LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGOUT`, `PASSWORD_CHANGED`, `PASSWORD_RESET`, `EMAIL_VERIFIED`, `MFA_ENABLED`, `MFA_DISABLED`, `API_KEY_CREATED`, `API_KEY_REVOKED`, `ACCOUNT_LOCKED`, `ACCOUNT_UNLOCKED`); `DomainEvent<T>` type with id, type, timestamp, optional userId/payload/ip; `DomainEventFactory` for event creation
+- **Event bus** — in-memory pub/sub with fire-and-forget semantics; type-specific and wildcard (`subscribeAll`) subscriptions; error isolation (throwing handlers don't crash publisher); `EventBus` port ready to swap for Redis Pub/Sub or NATS
+- **Webhooks** — admin-only CRUD API (`POST /api/v1/webhooks`, `GET /api/v1/webhooks`, `DELETE /api/v1/webhooks/:id`); HMAC-SHA256 signed delivery with `X-Webhook-Signature` header; event-type filtering per subscription; `WebhookRegistry` port + in-memory adapter; `WebhookDispatcher` with fire-and-forget delivery and AbortController timeout
+- **Background job queue** — polling-based in-memory job processor with configurable interval; exponential backoff retry (`min(1000 * 2^attempts, 60000)` ms); dead letter queue for exhausted retries; job lifecycle (PENDING → RUNNING → COMPLETED / FAILED → DEAD); `JobQueue` port ready to swap for Redis/SQLite-backed adapter
+- 3 new core ports: `EventBus`, `WebhookRegistry`, `JobQueue`
+- 7 new DI container tokens: `EventBus`, `EventFactory`, `WebhookRegistry`, `WebhookDispatcher`, `JobQueue`, `WebSocketManager`, `SseHandler`
+- WebSocket JSON protocol: `auth`, `subscribe`, `unsubscribe`, `ping` client messages; `connected`, `auth_result`, `subscribed`, `event`, `pong`, `error` server messages
+- 36 new tests across 4 new test files + expanded integration tests (246 → 282 total, 32 files, 667 expect() calls)
+
+### Changed
+
+- Router extended with webhook routes and SSE endpoint; new parametric matcher for `DELETE /api/v1/webhooks/:id`
+- Server now conditionally enables Bun.serve() WebSocket config when `WebSocketManager` is provided
+- `main.ts` bootstrap wires event bus, webhook dispatcher, job queue; webhook dispatcher auto-subscribed as wildcard event listener; WebSocket broadcast wired as wildcard subscriber; job queue starts after server and stops on graceful shutdown
+- Version bumped to 1.5.0
+
+---
+
 ## [1.4.0] - 2026-02-16
 
 ### Added
