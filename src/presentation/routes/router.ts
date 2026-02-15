@@ -1,11 +1,11 @@
-import type { RequestContext } from "../context.js";
 import type { AuthService } from "../../application/services/auth.service.js";
-import type { UserService } from "../../application/services/user.service.js";
 import type { HealthService } from "../../application/services/health.service.js";
-import type { TokenService } from "../../core/ports/token-service.js";
+import type { UserService } from "../../application/services/user.service.js";
 import type { Logger } from "../../core/ports/logger.js";
-import { healthHandler } from "../handlers/health.handler.js";
+import type { TokenService } from "../../core/ports/token-service.js";
+import type { RequestContext } from "../context.js";
 import { authHandlers } from "../handlers/auth.handler.js";
+import { healthHandler } from "../handlers/health.handler.js";
 import { userHandlers } from "../handlers/user.handler.js";
 
 /**
@@ -25,8 +25,16 @@ interface RouterDeps {
 export const createRouter = (deps: RouterDeps) => {
   const { logger } = deps;
   const health = healthHandler(deps.healthService);
-  const auth = authHandlers(deps.authService, logger.child({ layer: "handler", handler: "auth" }));
-  const users = userHandlers(deps.userService, deps.tokenService, logger.child({ layer: "handler", handler: "user" }));
+  const auth = authHandlers(
+    deps.authService,
+    deps.tokenService,
+    logger.child({ layer: "handler", handler: "auth" }),
+  );
+  const users = userHandlers(
+    deps.userService,
+    deps.tokenService,
+    logger.child({ layer: "handler", handler: "user" }),
+  );
 
   /** Pre-computed 404 body template */
   const notFound404 = (method: string, path: string): Response => {
@@ -48,6 +56,7 @@ export const createRouter = (deps: RouterDeps) => {
     ["POST /api/v1/auth/register", auth.register],
     ["POST /api/v1/auth/login", auth.login],
     ["POST /api/v1/auth/refresh", auth.refresh],
+    ["POST /api/v1/auth/logout", auth.logout],
 
     // Users (authenticated)
     ["GET /api/v1/users/me", users.getMe],

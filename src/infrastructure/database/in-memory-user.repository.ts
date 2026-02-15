@@ -1,9 +1,13 @@
-import type { UserRepository, CreateUserData, UpdateUserData } from "../../core/ports/user.repository.js";
 import type { User } from "../../core/entities/user.entity.js";
+import { type AppError, conflict, notFound } from "../../core/errors/app-error.js";
+import type {
+  CreateUserData,
+  UpdateUserData,
+  UserRepository,
+} from "../../core/ports/user.repository.js";
 import type { UserId } from "../../core/types/brand.js";
-import { ok, err, type Result } from "../../core/types/result.js";
-import { notFound, conflict, type AppError } from "../../core/errors/app-error.js";
 import { brand } from "../../core/types/brand.js";
+import { type Result, err, ok } from "../../core/types/result.js";
 import { generateId } from "../../shared/utils/id.js";
 
 /**

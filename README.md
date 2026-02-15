@@ -38,7 +38,7 @@
 - **Clean Architecture** — Domain → Application → Infrastructure → Presentation
 - **Strictest TypeScript** — 22+ compiler flags, branded types, `Result<T,E>` monad (no `throw`)
 - **Security-first** — Argon2id (Bun-native), HMAC-SHA256 JWT (Web Crypto API), CORS, rate-limiting, security headers
-- **41 tests** — unit + integration, all passing
+- **67 tests** — unit + integration, all passing
 
 ## Architecture
 
@@ -54,7 +54,7 @@ src/
 │   └── services/           # AuthService, UserService, HealthService
 ├── infrastructure/         # Adapters (swap without touching business logic)
 │   ├── config/             # Zod-validated environment config — fail-fast on boot
-│   ├── database/           # In-memory user repository (plug your own)
+│   ├── database/           # SQLite + in-memory adapters, migrations
 │   ├── logging/            # Structured JSON logger with batched async writes
 │   └── security/           # Argon2id hasher, HMAC-SHA256 JWT service
 ├── presentation/           # HTTP layer
@@ -256,7 +256,7 @@ Benchmarked on MacBook Pro (Intel i7-9750H, 12 threads) with [bombardier](https:
 ## Testing
 
 ```bash
-# Run all tests (41 tests across 6 files)
+# Run all tests (67 tests across 10 files)
 bun test
 
 # Watch mode
@@ -276,13 +276,13 @@ Tests cover:
 
 ### v1.1 — Persistence & Auth Hardening
 
-- [ ] **SQLite adapter** via `bun:sqlite` (zero-dep, swap the in-memory repository)
-- [ ] **Database migrations** — versioned SQL files with up/down
-- [ ] **Logout endpoint** — `POST /api/v1/auth/logout` with token blacklist (in-memory Set → Redis-ready port)
-- [ ] **Account lockout** — lock after N failed login attempts
-- [ ] **Dockerfile** — multi-stage build, `distroless` base, <20 MB image
-- [ ] **docker-compose** — app + SQLite volume
-- [ ] **Test coverage** — add `--coverage` flag, enforce 80%+ threshold in CI
+- [x] **SQLite adapter** via `bun:sqlite` (zero-dep, swap the in-memory repository)
+- [x] **Database migrations** — versioned SQL files with up/down
+- [x] **Logout endpoint** — `POST /api/v1/auth/logout` with token blacklist (in-memory Set → Redis-ready port)
+- [x] **Account lockout** — lock after N failed login attempts
+- [x] **Dockerfile** — multi-stage build, `distroless` base, <20 MB image
+- [x] **docker-compose** — app + SQLite volume
+- [x] **Test coverage** — add `--coverage` flag, enforce 80%+ threshold in CI
 
 ### v1.2 — API Maturity
 
@@ -342,13 +342,13 @@ Tests cover:
 | Architecture | ✅ Clean hexagonal, DI container, Result monad |
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
-| Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers |
-| Testing | ✅ 41 tests (unit + integration) |
+| Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
+| Testing | ✅ 67 tests (unit + integration) |
 | CI/CD | ✅ GitHub Actions (lint → check → test → build) |
-| Database | ⚠️ In-memory only |
-| Auth | ⚠️ No logout, no email verification, no MFA |
+| Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
+| Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout |
+| Containerization | ✅ Dockerfile (distroless), docker-compose |
 | Observability | ⚠️ Logging only, no metrics/tracing |
-| Containerization | ❌ No Dockerfile |
 | API Docs | ❌ No OpenAPI spec |
 | Caching | ❌ None |
 | Events | ❌ None |

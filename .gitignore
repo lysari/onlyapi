@@ -29,6 +29,12 @@ coverage/
 # Bun
 bun.lockb
 
+# SQLite data
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
 # Temporary
 tmp/
 temp/

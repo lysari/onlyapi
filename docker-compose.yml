@@ -1,0 +1,39 @@
+# onlyApi — docker-compose setup
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (min 32 chars)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_PATH: /app/data/onlyapi.sqlite
+      LOCKOUT_MAX_ATTEMPTS: ${LOCKOUT_MAX_ATTEMPTS:-5}
+      LOCKOUT_DURATION_MS: ${LOCKOUT_DURATION_MS:-900000}
+    volumes:
+      - sqlite-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "--eval", "const r = await fetch('http://localhost:3000/health'); process.exit(r.ok ? 0 : 1)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  sqlite-data:
+    driver: local

@@ -77,6 +77,7 @@ const routes: readonly RouteInfo[] = [
   { method: "POST", path: "/api/v1/auth/register", auth: false, description: "Register user" },
   { method: "POST", path: "/api/v1/auth/login", auth: false, description: "Login" },
   { method: "POST", path: "/api/v1/auth/refresh", auth: false, description: "Refresh token" },
+  { method: "POST", path: "/api/v1/auth/logout", auth: true, description: "Logout" },
   { method: "GET", path: "/api/v1/users/me", auth: true, description: "Get profile" },
   { method: "PATCH", path: "/api/v1/users/me", auth: true, description: "Update profile" },
   { method: "DELETE", path: "/api/v1/users/me", auth: true, description: "Delete account" },
@@ -88,7 +89,7 @@ const logo = (): string => {
   const lines = [
     `${bold(cyan("  ┌─────────────────────────────────────────┐"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
-    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.0.0"))}                      ${bold(cyan("│"))}`,
+    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.1.0"))}                      ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}   ${dim(gray("Zero-dep enterprise REST API on Bun"))}    ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
     `${bold(cyan("  └─────────────────────────────────────────┘"))}`,

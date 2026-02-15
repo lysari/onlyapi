@@ -1,0 +1,5 @@
+# SQLite data directory
+data/
+
+# Docker
+.dockerignore

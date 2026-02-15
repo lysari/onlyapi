@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-15
+
+### Added
+
+- **SQLite persistence** via `bun:sqlite` — zero external dependencies, WAL mode, prepared statements
+- **Database migrations** — versioned TypeScript migrations with up/down, tracked in `_migrations` table
+- **Logout endpoint** — `POST /api/v1/auth/logout` with token blacklist (in-memory + SQLite adapters)
+- **Token blacklist** — SHA-256 hashed tokens, auto-pruning expired entries, Redis-ready port
+- **Account lockout** — configurable max attempts + lockout duration, resets on successful login
+- **Dockerfile** — multi-stage build with `distroless` base, health check, non-root user
+- **docker-compose.yml** — app + SQLite volume, all env vars configurable
+- **Test coverage** — `bun test --coverage` script, 67 tests (up from 41)
+- `AccountLockout` port + in-memory and SQLite adapters
+- `TokenBlacklist` port + in-memory and SQLite adapters
+- `SqliteUserRepository` adapter with prepared statements
+- New unit tests: SQLite user repository, migrations, token blacklist, account lockout
+- New integration tests: logout flow, blacklisted token rejection, account lockout
+- `DATABASE_PATH`, `LOCKOUT_MAX_ATTEMPTS`, `LOCKOUT_DURATION_MS` config options
+
+### Changed
+
+- `AuthService` now requires `TokenBlacklist` and `AccountLockout` dependencies
+- `main.ts` bootstrap is now async, initializes SQLite + runs migrations at boot
+- Auth handler receives `TokenService` for logout authentication
+- Version bumped to 1.1.0 in package.json and startup banner
+- Refresh token rotation now blacklists the old refresh token
+- Login flow checks account lockout before credential verification
+
 ## [1.0.0] - 2026-02-11
 
 ### Added

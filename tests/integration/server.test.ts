@@ -13,13 +13,20 @@ beforeAll(async () => {
   process.env["JWT_REFRESH_EXPIRES_IN"] = "7d";
   process.env["CORS_ORIGINS"] = "*";
   process.env["LOG_LEVEL"] = "error"; // quiet for tests
+  process.env["DATABASE_PATH"] = ":memory:";
+  process.env["LOCKOUT_MAX_ATTEMPTS"] = "3";
+  process.env["LOCKOUT_DURATION_MS"] = "5000";
 
   // Dynamically import to pick up env
+  const { Database } = await import("bun:sqlite");
   const { loadConfig } = await import("../../src/infrastructure/config/config.js");
   const { createLogger } = await import("../../src/infrastructure/logging/logger.js");
   const { createPasswordHasher } = await import("../../src/infrastructure/security/password-hasher.js");
   const { createTokenService } = await import("../../src/infrastructure/security/token-service.js");
-  const { createInMemoryUserRepository } = await import("../../src/infrastructure/database/in-memory-user.repository.js");
+  const { createInMemoryTokenBlacklist } = await import("../../src/infrastructure/security/token-blacklist.js");
+  const { createInMemoryAccountLockout } = await import("../../src/infrastructure/security/account-lockout.js");
+  const { createSqliteUserRepository } = await import("../../src/infrastructure/database/sqlite-user.repository.js");
+  const { migrateUp } = await import("../../src/infrastructure/database/migrations/runner.js");
   const { createAuthService } = await import("../../src/application/services/auth.service.js");
   const { createUserService } = await import("../../src/application/services/user.service.js");
   const { createHealthService } = await import("../../src/application/services/health.service.js");
@@ -30,9 +37,21 @@ beforeAll(async () => {
   const logger = createLogger(config.log.level);
   const passwordHasher = createPasswordHasher();
   const tokenService = createTokenService(config.jwt);
-  const userRepo = createInMemoryUserRepository();
 
-  const authService = createAuthService({ userRepo, passwordHasher, tokenService, logger });
+  // SQLite in-memory for tests
+  const db = new Database(":memory:");
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
+  await migrateUp(db, logger);
+
+  const userRepo = createSqliteUserRepository(db);
+  const tokenBlacklist = createInMemoryTokenBlacklist();
+  const accountLockout = createInMemoryAccountLockout({
+    maxAttempts: 3,
+    lockoutDurationMs: 5000,
+  });
+
+  const authService = createAuthService({ userRepo, passwordHasher, tokenService, tokenBlacklist, accountLockout, logger });
   const userService = createUserService({ userRepo, passwordHasher, logger });
   const healthService = createHealthService({ logger, version: "test" });
 
@@ -167,5 +186,82 @@ describe("Integration: Error handling", () => {
       headers: { Origin: "http://localhost:3000" },
     });
     expect(res.status).toBe(204);
+  });
+});
+
+describe("Integration: Logout", () => {
+  let accessToken = "";
+  let refreshToken = "";
+
+  it("register + login to get tokens", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "logout@test.com", password: "Test1234!" }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { data: { accessToken: string; refreshToken: string } };
+    accessToken = body.data.accessToken;
+    refreshToken = body.data.refreshToken;
+  });
+
+  it("POST /api/v1/auth/logout returns 204", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/logout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("refresh with blacklisted token fails", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("logout without auth returns 401", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: "some-token" }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("Integration: Account lockout", () => {
+  it("register a user for lockout testing", async () => {
+    const res = await fetch(`${BASE}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "lockout@test.com", password: "Test1234!" }),
+    });
+    expect(res.status).toBe(201);
+  });
+
+  it("locks account after 3 failed attempts", async () => {
+    // 3 failed attempts (maxAttempts = 3 in test config)
+    for (let i = 0; i < 3; i++) {
+      await fetch(`${BASE}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "lockout@test.com", password: "wrong" }),
+      });
+    }
+
+    // 4th attempt should be locked
+    const res = await fetch(`${BASE}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "lockout@test.com", password: "Test1234!" }),
+    });
+    expect(res.status).toBe(403);
   });
 });

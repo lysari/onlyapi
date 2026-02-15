@@ -21,7 +21,12 @@ export const updateUserDto = z.object({
   password: z.string().min(8).max(128).optional(),
 });
 
+export const logoutDto = z.object({
+  refreshToken: z.string().min(1),
+});
+
 export type RegisterDto = z.infer<typeof registerDto>;
 export type LoginDto = z.infer<typeof loginDto>;
 export type RefreshDto = z.infer<typeof refreshDto>;
 export type UpdateUserDto = z.infer<typeof updateUserDto>;
+export type LogoutDto = z.infer<typeof logoutDto> & { accessToken: string };

@@ -34,6 +34,12 @@ const configSchema = z.object({
 
   database: z.object({
     url: z.string().url().optional(),
+    path: z.string().default("data/onlyapi.sqlite"),
+  }),
+
+  lockout: z.object({
+    maxAttempts: z.coerce.number().int().positive().default(5),
+    durationMs: z.coerce.number().int().positive().default(900_000), // 15 minutes
   }),
 });
 
@@ -63,6 +69,11 @@ export const loadConfig = (): AppConfig => {
     },
     database: {
       url: Bun.env["DATABASE_URL"],
+      path: Bun.env["DATABASE_PATH"],
+    },
+    lockout: {
+      maxAttempts: Bun.env["LOCKOUT_MAX_ATTEMPTS"],
+      durationMs: Bun.env["LOCKOUT_DURATION_MS"],
     },
   });
 

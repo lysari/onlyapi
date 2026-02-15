@@ -35,7 +35,10 @@ export const Tokens = {
   UserRepository: Symbol.for("UserRepository"),
   PasswordHasher: Symbol.for("PasswordHasher"),
   TokenService: Symbol.for("TokenService"),
+  TokenBlacklist: Symbol.for("TokenBlacklist"),
+  AccountLockout: Symbol.for("AccountLockout"),
   AuthService: Symbol.for("AuthService"),
   UserService: Symbol.for("UserService"),
   HealthService: Symbol.for("HealthService"),
+  Database: Symbol.for("Database"),
 } as const;
