@@ -57,11 +57,13 @@
     "upgrade:project": "bun src/cli/index.ts upgrade"
   },
   "dependencies": {
+    "mssql": "^12.2.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/bun": "^1.2.2",
+    "@types/mssql": "^9.1.9",
     "typescript": "^5.7.3"
   }
 }

@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import sql from "mssql";
 import { createAdminService } from "./application/services/admin.service.js";
 import { createApiKeyService } from "./application/services/api-key.service.js";
 import { createAuthService } from "./application/services/auth.service.js";
@@ -15,6 +16,18 @@ import { createInMemoryCache } from "./infrastructure/cache/in-memory-cache.js";
 import { createRedisCache } from "./infrastructure/cache/redis-cache.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { migrateUp } from "./infrastructure/database/migrations/runner.js";
+import {
+  createMssqlAccountLockout,
+  createMssqlApiKeyRepository,
+  createMssqlAuditLog,
+  createMssqlOAuthAccountRepo,
+  createMssqlPasswordHistory,
+  createMssqlRefreshTokenStore,
+  createMssqlTokenBlacklist,
+  createMssqlUserRepository,
+  createMssqlVerificationTokenRepo,
+  mssqlMigrateUp,
+} from "./infrastructure/database/mssql/index.js";
 import {
   createPgAccountLockout,
   createPgApiKeyRepository,
@@ -60,6 +73,7 @@ import { Container, Tokens } from "./shared/container.js";
  * Bootstrap — compose the entire dependency graph, then start the server.
  * Single entry point, fail-fast on misconfiguration.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: bootstrap wires all drivers/services — inherently branchy
 const bootstrap = async () => {
   const bootStart = performance.now();
 
@@ -75,6 +89,7 @@ const bootstrap = async () => {
   let db: Database | undefined;
   // biome-ignore lint/suspicious/noExplicitAny: Bun.sql tagged template type
   let pgSql: any | undefined;
+  let mssqlPool: sql.ConnectionPool | undefined;
   let userRepo: ReturnType<typeof createSqliteUserRepository>;
   let tokenBlacklist: ReturnType<typeof createSqliteTokenBlacklist>;
   let accountLockout: ReturnType<typeof createSqliteAccountLockout>;
@@ -111,6 +126,33 @@ const bootstrap = async () => {
     passwordHistory = createPgPasswordHistory(pgSql);
     oauthAccounts = createPgOAuthAccountRepo(pgSql);
     logger.info("Postgres adapters initialized");
+  } else if (config.database.driver === "mssql") {
+    // SQL Server via mssql npm package (tedious TDS protocol)
+    const dbUrl = config.database.url;
+    if (!dbUrl) {
+      logger.fatal("DATABASE_URL is required when DATABASE_DRIVER=mssql");
+      process.exit(1);
+    }
+    mssqlPool = await sql.connect(dbUrl);
+    logger.info("SQL Server database connected", {
+      url: dbUrl.replace(/:[^:@]+@/, ":***@"),
+    });
+
+    await mssqlMigrateUp(mssqlPool, logger);
+
+    userRepo = createMssqlUserRepository(mssqlPool);
+    tokenBlacklist = createMssqlTokenBlacklist(mssqlPool);
+    accountLockout = createMssqlAccountLockout(mssqlPool, {
+      maxAttempts: config.lockout.maxAttempts,
+      lockoutDurationMs: config.lockout.durationMs,
+    });
+    auditLog = createMssqlAuditLog(mssqlPool);
+    verificationTokens = createMssqlVerificationTokenRepo(mssqlPool);
+    refreshTokenStore = createMssqlRefreshTokenStore(mssqlPool);
+    apiKeyRepo = createMssqlApiKeyRepository(mssqlPool);
+    passwordHistory = createMssqlPasswordHistory(mssqlPool);
+    oauthAccounts = createMssqlOAuthAccountRepo(mssqlPool);
+    logger.info("SQL Server adapters initialized");
   } else {
     // SQLite (default — zero deps, bun:sqlite built-in)
     const dbPath = config.database.path;
@@ -400,6 +442,7 @@ const bootstrap = async () => {
     jobQueue.stop();
     srv.flush(); // flush buffered access logs before exit
     if (db) db.close(); // close SQLite connection
+    if (mssqlPool) mssqlPool.close(); // close SQL Server connection pool
     cache.close(); // close cache (no-op for in-memory, QUIT for Redis)
     printShutdown(signal);
     instance.stop();

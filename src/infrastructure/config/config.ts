@@ -34,7 +34,7 @@ const configSchema = z.object({
   }),
 
   database: z.object({
-    driver: z.enum(["sqlite", "postgres"]).default("sqlite"),
+    driver: z.enum(["sqlite", "postgres", "mssql"]).default("sqlite"),
     url: z.string().optional(),
     path: z.string().default("data/onlyapi.sqlite"),
   }),
