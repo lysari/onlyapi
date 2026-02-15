@@ -103,6 +103,12 @@ const routes: readonly RouteInfo[] = [
     auth: true,
     description: "Unban user (admin)",
   },
+  {
+    method: "GET",
+    path: "/metrics",
+    auth: false,
+    description: "Prometheus metrics",
+  },
 ];
 
 // ── ASCII Logo ──────────────────────────────────────────────────────────
@@ -111,7 +117,7 @@ const logo = (): string => {
   const lines = [
     `${bold(cyan("  ┌─────────────────────────────────────────┐"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
-    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.2.0"))}                      ${bold(cyan("│"))}`,
+    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.3.0"))}                      ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}   ${dim(gray("Zero-dep enterprise REST API on Bun"))}    ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
     `${bold(cyan("  └─────────────────────────────────────────┘"))}`,

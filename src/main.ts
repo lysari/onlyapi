@@ -5,6 +5,9 @@ import { createAdminService } from "./application/services/admin.service.js";
 import { createAuthService } from "./application/services/auth.service.js";
 import { createHealthService } from "./application/services/health.service.js";
 import { createUserService } from "./application/services/user.service.js";
+import { AlertLevel } from "./core/ports/alert-sink.js";
+import { CircuitState } from "./core/ports/circuit-breaker.js";
+import { createNoopAlertSink, createWebhookAlertSink } from "./infrastructure/alerting/webhook.js";
 import { loadConfig } from "./infrastructure/config/config.js";
 import { migrateUp } from "./infrastructure/database/migrations/runner.js";
 import { createSqliteAccountLockout } from "./infrastructure/database/sqlite-account-lockout.js";
@@ -12,6 +15,8 @@ import { createSqliteAuditLog } from "./infrastructure/database/sqlite-audit-log
 import { createSqliteTokenBlacklist } from "./infrastructure/database/sqlite-token-blacklist.js";
 import { createSqliteUserRepository } from "./infrastructure/database/sqlite-user.repository.js";
 import { createLogger } from "./infrastructure/logging/logger.js";
+import { createMetricsCollector } from "./infrastructure/metrics/prometheus.js";
+import { createCircuitBreaker } from "./infrastructure/resilience/circuit-breaker.js";
 import { createPasswordHasher } from "./infrastructure/security/password-hasher.js";
 import { createTokenService } from "./infrastructure/security/token-service.js";
 import { createRouter } from "./presentation/routes/router.js";
@@ -69,6 +74,62 @@ const bootstrap = async () => {
   Container.register(Tokens.UserRepository, userRepo);
   Container.register(Tokens.AuditLog, auditLog);
 
+  // 6b. Observability — metrics collector
+  const metricsCollector = createMetricsCollector();
+  Container.register(Tokens.MetricsCollector, metricsCollector);
+
+  // 6c. Alerting — webhook alert sink (or noop if no URL configured)
+  const alertSink = config.alerting.webhookUrl
+    ? createWebhookAlertSink({
+        url: config.alerting.webhookUrl,
+        timeoutMs: config.alerting.timeoutMs,
+        logger: logger.child({ service: "alerting" }),
+      })
+    : createNoopAlertSink();
+  Container.register(Tokens.AlertSink, alertSink);
+
+  // 6d. Resilience — circuit breaker for database operations
+  const dbCircuitBreaker = createCircuitBreaker({
+    name: "database",
+    failureThreshold: config.circuitBreaker.failureThreshold,
+    resetTimeoutMs: config.circuitBreaker.resetTimeoutMs,
+    halfOpenSuccessThreshold: config.circuitBreaker.halfOpenSuccessThreshold,
+    onStateChange: (cbName, from, to) => {
+      logger.warn("Circuit breaker state changed", {
+        circuitBreaker: cbName,
+        from,
+        to,
+      });
+
+      // Update metrics gauge: 0=closed, 1=half_open, 2=open
+      const stateValue = to === CircuitState.CLOSED ? 0 : to === CircuitState.HALF_OPEN ? 1 : 2;
+      metricsCollector.circuitBreakerState.set(stateValue, { name: cbName });
+
+      // Fire alerting hooks on state changes
+      if (to === CircuitState.OPEN) {
+        alertSink.send({
+          level: AlertLevel.CRITICAL,
+          title: `Circuit breaker OPEN: ${cbName}`,
+          message: `Circuit breaker "${cbName}" has opened after reaching failure threshold. Requests will be short-circuited.`,
+          timestamp: new Date().toISOString(),
+          source: "onlyApi",
+          metadata: { circuitBreaker: cbName, from, to },
+        });
+        metricsCollector.alertsSentTotal.inc({ level: "critical" });
+      } else if (to === CircuitState.CLOSED && from === CircuitState.HALF_OPEN) {
+        alertSink.send({
+          level: AlertLevel.RESOLVED,
+          title: `Circuit breaker CLOSED: ${cbName}`,
+          message: `Circuit breaker "${cbName}" has recovered and returned to normal operation.`,
+          timestamp: new Date().toISOString(),
+          source: "onlyApi",
+          metadata: { circuitBreaker: cbName, from, to },
+        });
+        metricsCollector.alertsSentTotal.inc({ level: "resolved" });
+      }
+    },
+  });
+
   // 7. Application services
   const authService = createAuthService({
     userRepo,
@@ -87,7 +148,8 @@ const bootstrap = async () => {
 
   const healthService = createHealthService({
     logger: logger.child({ service: "health" }),
-    version: "1.2.0",
+    version: "1.3.0",
+    circuitBreakers: [dbCircuitBreaker],
   });
 
   const adminService = createAdminService({
@@ -108,9 +170,10 @@ const bootstrap = async () => {
     healthService,
     adminService,
     tokenService,
+    metricsCollector,
     logger,
   });
-  const srv = createServer({ config, logger, router });
+  const srv = createServer({ config, logger, router, metrics: metricsCollector });
 
   // 9. Start
   const instance = srv.start();
@@ -154,6 +217,19 @@ const bootstrap = async () => {
       error: reason instanceof Error ? reason.message : String(reason),
       stack: reason instanceof Error ? reason.stack : undefined,
     });
+
+    // Fire alert on fatal errors
+    alertSink.send({
+      level: AlertLevel.CRITICAL,
+      title: "Unhandled promise rejection",
+      message: reason instanceof Error ? reason.message : String(reason),
+      timestamp: new Date().toISOString(),
+      source: "onlyApi",
+      metadata: {
+        stack: reason instanceof Error ? reason.stack : undefined,
+      },
+    });
+    metricsCollector.alertsSentTotal.inc({ level: "critical" });
   });
 
   return instance;

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-15
+
+### Added
+
+- **Prometheus metrics** — `GET /metrics` endpoint serving Prometheus text exposition format (v0.0.4) with counters, histograms, and gauges: `http_requests_total`, `http_request_duration_ms`, `http_active_connections`, `http_errors_total`, `circuit_breaker_state`, `alerts_sent_total`
+- **OpenTelemetry traces** — W3C Trace Context propagation (`traceparent` header), 128-bit trace IDs + 64-bit span IDs generated per request, trace context included in structured JSON logs and response headers
+- **Circuit breaker** — resilience pattern for external service calls with configurable failure threshold, reset timeout, and half-open success threshold; state machine (CLOSED → OPEN → HALF_OPEN → CLOSED); `CircuitBreaker` port + infrastructure adapter
+- **Retry with backoff** — configurable retry policy with exponential backoff, jitter, max delay cap, retryable predicate, and per-attempt callbacks; `RetryPolicy` port + infrastructure adapter
+- **Graceful degradation** — health service now monitors circuit breaker states; reports `degraded` status when downstream services fail; `GET /readiness` reflects circuit breaker health in component checks
+- **Alerting hooks** — `AlertSink` port with webhook adapter (`ALERT_WEBHOOK_URL`); fires on circuit breaker OPEN/recovery, unhandled rejections; `createNoopAlertSink` when no URL configured; retry with backoff on webhook delivery failures
+- `MetricsCollector` port with zero-dependency Prometheus adapter (counters, histograms with configurable buckets, gauges with label support)
+- `CircuitBreakerOptions` config section (`CB_FAILURE_THRESHOLD`, `CB_RESET_TIMEOUT_MS`, `CB_HALF_OPEN_SUCCESS_THRESHOLD`)
+- `AlertSink` config section (`ALERT_WEBHOOK_URL`, `ALERT_TIMEOUT_MS`)
+- `TraceContext` type with `traceId`, `spanId`, `parentSpanId`, `flags`
+- `RequestContext` extended with `trace: TraceContext` field
+- Child loggers now include `traceId` and `spanId` bindings for structured log correlation
+- New DI tokens: `MetricsCollector`, `AlertSink`
+- 58 new tests (120 → 178 total across 21 files)
+
+### Changed
+
+- `ComponentHealth.status` now supports `"degraded"` in addition to `"ok"` | `"down"`
+- `HealthService` accepts optional `circuitBreakers` array for graceful degradation monitoring
+- Server hot path now tracks metrics (request count, duration, active connections, errors) without measurable latency impact
+- All responses now include `traceparent` header for distributed tracing correlation
+- Unhandled promise rejections now fire alerting hooks in addition to logging
+
+---
+
 ## [1.2.0] - 2026-02-15
 
 ### Added

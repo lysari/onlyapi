@@ -42,6 +42,17 @@ const configSchema = z.object({
     maxAttempts: z.coerce.number().int().positive().default(5),
     durationMs: z.coerce.number().int().positive().default(900_000), // 15 minutes
   }),
+
+  alerting: z.object({
+    webhookUrl: z.string().url().optional(),
+    timeoutMs: z.coerce.number().int().positive().default(5_000),
+  }),
+
+  circuitBreaker: z.object({
+    failureThreshold: z.coerce.number().int().positive().default(5),
+    resetTimeoutMs: z.coerce.number().int().positive().default(30_000),
+    halfOpenSuccessThreshold: z.coerce.number().int().positive().default(2),
+  }),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -76,6 +87,15 @@ export const loadConfig = (): AppConfig => {
     lockout: {
       maxAttempts: Bun.env["LOCKOUT_MAX_ATTEMPTS"],
       durationMs: Bun.env["LOCKOUT_DURATION_MS"],
+    },
+    alerting: {
+      webhookUrl: Bun.env["ALERT_WEBHOOK_URL"],
+      timeoutMs: Bun.env["ALERT_TIMEOUT_MS"],
+    },
+    circuitBreaker: {
+      failureThreshold: Bun.env["CB_FAILURE_THRESHOLD"],
+      resetTimeoutMs: Bun.env["CB_RESET_TIMEOUT_MS"],
+      halfOpenSuccessThreshold: Bun.env["CB_HALF_OPEN_SUCCESS_THRESHOLD"],
     },
   });
 

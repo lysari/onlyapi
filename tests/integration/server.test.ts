@@ -34,6 +34,7 @@ beforeAll(async () => {
   const { createAdminService } = await import("../../src/application/services/admin.service.js");
   const { createRouter } = await import("../../src/presentation/routes/router.js");
   const { createServer } = await import("../../src/presentation/server.js");
+  const { createMetricsCollector } = await import("../../src/infrastructure/metrics/prometheus.js");
 
   const config = loadConfig();
   const logger = createLogger(config.log.level);
@@ -58,9 +59,10 @@ beforeAll(async () => {
   const healthService = createHealthService({ logger, version: "test" });
   const auditLog = createSqliteAuditLog(db);
   const adminService = createAdminService({ userRepo, auditLog, logger });
+  const metricsCollector = createMetricsCollector();
 
-  const router = createRouter({ authService, userService, healthService, adminService, tokenService, logger });
-  const srv = createServer({ config, logger, router });
+  const router = createRouter({ authService, userService, healthService, adminService, tokenService, metricsCollector, logger });
+  const srv = createServer({ config, logger, router, metrics: metricsCollector });
   server = srv.start();
 });
 
@@ -372,5 +374,67 @@ describe("Integration: Admin endpoints", () => {
   it("GET /api/v1/admin/users/:id requires authentication", async () => {
     const res = await fetch(`${BASE}/api/v1/admin/users/some-id`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("Integration: Prometheus metrics", () => {
+  it("GET /metrics returns Prometheus text format", async () => {
+    const res = await fetch(`${BASE}/metrics`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/plain");
+    const body = await res.text();
+    expect(body).toContain("http_requests_total");
+    expect(body).toContain("http_request_duration_ms");
+    expect(body).toContain("http_active_connections");
+    expect(body).toContain("http_errors_total");
+    expect(body).toContain("circuit_breaker_state");
+    expect(body).toContain("alerts_sent_total");
+  });
+
+  it("metrics reflect actual request counts", async () => {
+    // Make a few requests
+    await fetch(`${BASE}/health`);
+    await fetch(`${BASE}/health`);
+    const res = await fetch(`${BASE}/metrics`);
+    const body = await res.text();
+    // Should have recorded requests for /health
+    expect(body).toContain('method="GET"');
+  });
+});
+
+describe("Integration: OpenTelemetry traces", () => {
+  it("response includes traceparent header", async () => {
+    const res = await fetch(`${BASE}/health`);
+    const traceparent = res.headers.get("traceparent");
+    expect(traceparent).toBeTruthy();
+    // Validate W3C traceparent format: 00-{traceId}-{spanId}-{flags}
+    expect(traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
+  });
+
+  it("propagates incoming trace context", async () => {
+    const incomingTraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+    const incomingSpanId = "00f067aa0ba902b7";
+    const res = await fetch(`${BASE}/health`, {
+      headers: {
+        traceparent: `00-${incomingTraceId}-${incomingSpanId}-01`,
+      },
+    });
+    const traceparent = res.headers.get("traceparent");
+    expect(traceparent).toBeTruthy();
+    // Should have same trace ID (propagated)
+    expect(traceparent).toContain(incomingTraceId);
+    // Span ID should be different (new span for this service)
+    expect(traceparent).not.toContain(incomingSpanId);
+  });
+
+  it("generates new trace context when no traceparent header is sent", async () => {
+    const res1 = await fetch(`${BASE}/health`);
+    const res2 = await fetch(`${BASE}/health`);
+    const tp1 = res1.headers.get("traceparent") ?? "";
+    const tp2 = res2.headers.get("traceparent") ?? "";
+    // Different requests should have different trace IDs
+    const traceId1 = tp1.split("-")[1];
+    const traceId2 = tp2.split("-")[1];
+    expect(traceId1).not.toBe(traceId2);
   });
 });

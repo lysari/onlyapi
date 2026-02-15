@@ -3,11 +3,13 @@ import type { AuthService } from "../../application/services/auth.service.js";
 import type { HealthService } from "../../application/services/health.service.js";
 import type { UserService } from "../../application/services/user.service.js";
 import type { Logger } from "../../core/ports/logger.js";
+import type { MetricsCollector } from "../../core/ports/metrics.js";
 import type { TokenService } from "../../core/ports/token-service.js";
 import type { RequestContext } from "../context.js";
 import { adminHandlers } from "../handlers/admin.handler.js";
 import { authHandlers } from "../handlers/auth.handler.js";
 import { healthHandler } from "../handlers/health.handler.js";
+import { metricsHandler } from "../handlers/metrics.handler.js";
 import { openApiHandler } from "../handlers/openapi.handler.js";
 import { userHandlers } from "../handlers/user.handler.js";
 
@@ -24,6 +26,7 @@ interface RouterDeps {
   readonly healthService: HealthService;
   readonly adminService: AdminService;
   readonly tokenService: TokenService;
+  readonly metricsCollector: MetricsCollector;
   readonly logger: Logger;
 }
 
@@ -49,6 +52,7 @@ export const createRouter = (deps: RouterDeps) => {
     logger.child({ layer: "handler", handler: "admin" }),
   );
   const docs = openApiHandler();
+  const metrics = metricsHandler(deps.metricsCollector);
 
   /** Pre-computed 404 body template */
   const notFound404 = (method: string, path: string): Response => {
@@ -83,6 +87,9 @@ export const createRouter = (deps: RouterDeps) => {
     // OpenAPI documentation
     ["GET /docs", async (_req, _ctx) => docs.json()],
     ["GET /docs/html", async (_req, _ctx) => docs.html()],
+
+    // Prometheus metrics
+    ["GET /metrics", async (_req, _ctx) => metrics.serve()],
   ]);
 
   /**

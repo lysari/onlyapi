@@ -296,12 +296,12 @@ Tests cover:
 
 ### v1.3 — Observability & Resilience
 
-- [ ] **Prometheus metrics** — `GET /metrics` endpoint (request count, latency histogram, error rate, active connections)
-- [ ] **OpenTelemetry traces** — distributed tracing with trace/span IDs
-- [ ] **Circuit breaker** — resilience pattern for external service calls (DB, APIs)
-- [ ] **Retry with backoff** — configurable retry policy for transient failures
-- [ ] **Graceful degradation** — fallback responses when downstream services fail
-- [ ] **Alerting hooks** — webhook notifications on fatal errors / health degradation
+- [x] **Prometheus metrics** — `GET /metrics` endpoint (request count, latency histogram, error rate, active connections)
+- [x] **OpenTelemetry traces** — distributed tracing with trace/span IDs
+- [x] **Circuit breaker** — resilience pattern for external service calls (DB, APIs)
+- [x] **Retry with backoff** — configurable retry policy for transient failures
+- [x] **Graceful degradation** — fallback responses when downstream services fail
+- [x] **Alerting hooks** — webhook notifications on fatal errors / health degradation
 
 ### v1.4 — Auth Platform
 
@@ -343,13 +343,13 @@ Tests cover:
 | Performance | ✅ ~30K req/s, batched I/O, SO_REUSEPORT cluster |
 | TypeScript | ✅ 22+ strict flags, branded types |
 | Security | ✅ Argon2id, JWT, CORS, rate-limit, security headers, account lockout |
-| Testing | ✅ 120 tests (unit + integration) |
+| Testing | ✅ 178 tests (unit + integration) |
 | CI/CD | ✅ GitHub Actions (lint → check → test → build) |
 | Database | ✅ SQLite via bun:sqlite, WAL mode, migrations |
 | Auth | ✅ Register, login, refresh, logout, token blacklist, account lockout |
 | Containerization | ✅ Dockerfile (distroless), docker-compose |
-| Observability | ⚠️ Logging only, no metrics/tracing |
-| API Docs | ❌ No OpenAPI spec |
+| Observability | ✅ Structured logs, Prometheus metrics, OpenTelemetry traces, alerting hooks |
+| API Docs | ✅ OpenAPI 3.1 spec |
 | Caching | ❌ None |
 | Events | ❌ None |
 

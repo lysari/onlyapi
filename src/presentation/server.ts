@@ -1,6 +1,8 @@
 import type { Logger } from "../core/ports/logger.js";
+import type { MetricsCollector } from "../core/ports/metrics.js";
 import { brand } from "../core/types/brand.js";
 import type { AppConfig } from "../infrastructure/config/config.js";
+import { formatTraceparent, resolveTraceContext } from "../infrastructure/tracing/trace-context.js";
 import { formatAccessLog, formatCorsRejectLog, formatRateLimitLog } from "../shared/log-format.js";
 import { generateId } from "../shared/utils/id.js";
 import type { RequestContext } from "./context.js";
@@ -11,6 +13,7 @@ interface ServerDeps {
   readonly config: AppConfig;
   readonly logger: Logger;
   readonly router: Router;
+  readonly metrics: MetricsCollector;
 }
 
 /**
@@ -28,7 +31,7 @@ const extractPath = (url: string): string => {
 };
 
 export const createServer = (deps: ServerDeps) => {
-  const { config, logger, router } = deps;
+  const { config, logger, router, metrics } = deps;
 
   // ── Pre-compute EVERYTHING possible at boot, not per-request ──
 
@@ -191,26 +194,36 @@ export const createServer = (deps: ServerDeps) => {
     }
 
     // ── Route & handle ──
+    const trace = resolveTraceContext(req.headers.get("traceparent"));
     const ctx: RequestContext = {
       requestId: brand<string, "RequestId">(requestId),
       startTime: shouldLog ? performance.now() : 0,
       ip,
       method,
       path,
-      logger: logger.child({ requestId }),
+      trace,
+      logger: logger.child({ requestId, traceId: trace.traceId, spanId: trace.spanId }),
     };
+
+    // Track active connections
+    metrics.httpActiveConnections.inc();
 
     let response: Response;
     try {
       response = await router.handle(req, ctx, path);
     } catch (e: unknown) {
+      metrics.httpActiveConnections.dec();
+      metrics.httpErrorsTotal.inc({ method, status: "500" });
+      metrics.httpRequestsTotal.inc({ method, status: "500", path });
       logger.error("Unhandled error", {
         requestId,
+        traceId: trace.traceId,
         error: e instanceof Error ? e.message : String(e),
       });
       const h = new Headers();
       h.set("Content-Type", "application/json");
       h.set("X-Request-Id", requestId);
+      h.set("traceparent", formatTraceparent(trace));
       for (const [k, v] of secHeaderEntries) h.set(k, v);
       return new Response(internalErrorBody, { status: 500, headers: h });
     }
@@ -228,12 +241,17 @@ export const createServer = (deps: ServerDeps) => {
         const notModifiedHeaders = new Headers();
         notModifiedHeaders.set("ETag", etag);
         notModifiedHeaders.set("X-Request-Id", requestId);
+        notModifiedHeaders.set("traceparent", formatTraceparent(trace));
         for (const [k, v] of secHeaderEntries) notModifiedHeaders.set(k, v);
 
         if (shouldLog) {
           const durationMs = Math.round((performance.now() - ctx.startTime) * 100) / 100;
+          metrics.httpRequestDurationMs.observe(durationMs, { method, path });
           writeLog(formatAccessLog(method, path, 304, durationMs, ip, requestId));
         }
+
+        metrics.httpActiveConnections.dec();
+        metrics.httpRequestsTotal.inc({ method, status: "304", path });
 
         return new Response(null, { status: 304, headers: notModifiedHeaders });
       }
@@ -252,6 +270,7 @@ export const createServer = (deps: ServerDeps) => {
     resHeaders.set("X-RateLimit-Limit", rlMaxStr);
     resHeaders.set("X-RateLimit-Remaining", String(rlMax - rlEntry.count));
     resHeaders.set("X-RateLimit-Reset", String(Math.ceil(rlEntry.resetAt / 1000)));
+    resHeaders.set("traceparent", formatTraceparent(trace));
 
     for (const [k, v] of secHeaderEntries) resHeaders.set(k, v);
 
@@ -262,9 +281,18 @@ export const createServer = (deps: ServerDeps) => {
       for (const [k, v] of corsBase) resHeaders.set(k, v);
     }
 
+    // ── Metrics ──
+    const statusStr = String(response.status);
+    metrics.httpRequestsTotal.inc({ method, status: statusStr, path });
+    if (response.status >= 400) {
+      metrics.httpErrorsTotal.inc({ method, status: statusStr });
+    }
+    metrics.httpActiveConnections.dec();
+
     // Access log — immediate in dev, batched in production
     if (shouldLog) {
       const durationMs = Math.round((performance.now() - ctx.startTime) * 100) / 100;
+      metrics.httpRequestDurationMs.observe(durationMs, { method, path });
       writeLog(formatAccessLog(method, path, response.status, durationMs, ip, requestId));
     }
 
