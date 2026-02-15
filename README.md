@@ -54,8 +54,9 @@ bunx onlyapi init my-api && cd my-api && bun run dev
 
 - **SQLite** — `bun:sqlite` with WAL mode, zero-dep, built-in migrations
 - **PostgreSQL** — `Bun.sql` with 9 repository implementations and DDL migration runner
+- **SQL Server** — `mssql` (tedious TDS) with 9 repository adapters, T-SQL migrations, and stored procedure support
 - **In-memory** — testing adapter with full repository interface compliance
-- Config-driven adapter selection via `DATABASE_DRIVER=sqlite|postgres`
+- Config-driven adapter selection via `DATABASE_DRIVER=sqlite|postgres|mssql`
 
 ### Caching
 
@@ -133,7 +134,7 @@ src/
 │   └── services/         # Auth, User, Health
 ├── infrastructure/       # Adapters
 │   ├── config/           # Zod-validated env config
-│   ├── database/         # SQLite, PostgreSQL, in-memory
+│   ├── database/         # SQLite, PostgreSQL, SQL Server, in-memory
 │   ├── cache/            # In-memory, Redis (raw RESP)
 │   ├── logging/          # Structured JSON logger
 │   └── security/         # Argon2id, HMAC-SHA256 JWT
@@ -254,8 +255,8 @@ Environment variables are validated with Zod at startup. Invalid config crashes 
 | `JWT_SECRET` | — | **Required.** Min 32 characters |
 | `JWT_EXPIRES_IN` | `15m` | Access token TTL |
 | `JWT_REFRESH_EXPIRES_IN` | `7d` | Refresh token TTL |
-| `DATABASE_DRIVER` | `sqlite` | `sqlite` or `postgres` |
-| `DATABASE_URL` | — | PostgreSQL connection string |
+| `DATABASE_DRIVER` | `sqlite` | `sqlite`, `postgres`, or `mssql` |
+| `DATABASE_URL` | — | PostgreSQL or SQL Server connection string |
 | `REDIS_ENABLED` | `false` | Enable Redis cache layer |
 | `REDIS_HOST` | `127.0.0.1` | Redis hostname |
 | `REDIS_PORT` | `6379` | Redis port |
