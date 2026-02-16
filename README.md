@@ -111,7 +111,7 @@ bunx onlyapi init my-api && cd my-api && bun run dev
 
 ### Developer Experience
 
-- **CLI scaffolding** — `bunx onlyapi init my-api` creates a full project in seconds
+- **CLI scaffolding** — `bunx onlyapi init my-api` (minimal) or `bunx onlyapi init my-api --full` (enterprise)
 - **CLI upgrade** — `onlyapi upgrade` updates framework internals while preserving custom code
 - **Hot reload** — `bun run dev` with `--watch` mode
 - **351 tests** — unit, integration, E2E, and load testing across 36 files
@@ -160,7 +160,12 @@ src/
 ### Scaffold a Project
 
 ```bash
+# Minimal starter (~20 files — router, auth, health check)
 bunx onlyapi init my-api
+
+# Full enterprise template (~150 files, 350+ tests, multi-DB, OAuth, TOTP, metrics…)
+bunx onlyapi init my-api --full
+
 cd my-api
 bun run dev
 ```
