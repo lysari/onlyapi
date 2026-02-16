@@ -1,5 +1,5 @@
 {
-  "name": "@tasvet/onlyapi",
+  "name": "@enderworld/onlyapi",
   "version": "1.5.1",
   "description": "Zero-dependency, enterprise-grade REST API built on Bun — fastest runtime, strictest TypeScript, cleanest architecture.",
   "type": "module",
