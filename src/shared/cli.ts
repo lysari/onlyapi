@@ -1,5 +1,20 @@
+import { readFileSync } from "node:fs";
 import { cpus } from "node:os";
+import { join } from "node:path";
 import type { AppConfig } from "../infrastructure/config/config.js";
+
+// ── Read version from package.json ─────────────────────────────────────
+
+const readVersion = (): string => {
+  try {
+    const pkg = JSON.parse(readFileSync(join(import.meta.dir, "../../package.json"), "utf-8"));
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+};
+
+const APP_VERSION = readVersion();
 
 // ── ANSI escape sequences (zero dependencies) ──────────────────────────
 
@@ -117,7 +132,7 @@ const logo = (): string => {
   const lines = [
     `${bold(cyan("  ┌─────────────────────────────────────────┐"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
-    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray("v1.3.0"))}                      ${bold(cyan("│"))}`,
+    `${bold(cyan("  │"))}   ${bold(white("⚡ onlyApi"))}  ${dim(gray(`v${APP_VERSION}`))}${" ".repeat(Math.max(0, 27 - APP_VERSION.length))}${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}   ${dim(gray("Zero-dep enterprise REST API on Bun"))}    ${bold(cyan("│"))}`,
     `${bold(cyan("  │"))}                                           ${bold(cyan("│"))}`,
     `${bold(cyan("  └─────────────────────────────────────────┘"))}`,

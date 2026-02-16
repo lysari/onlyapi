@@ -361,6 +361,18 @@ const scaffoldFull = async (
       warn("Could not customize package.json");
     }
   }
+
+  // Patch hardcoded version in startup banner
+  const cliTsPath = join(targetDir, "src", "shared", "cli.ts");
+  if (existsSync(cliTsPath)) {
+    try {
+      const cliTs = await Bun.file(cliTsPath).text();
+      const patched = cliTs.replace(/v\d+\.\d+\.\d+/, "v0.1.0");
+      await Bun.write(cliTsPath, patched);
+    } catch {
+      /* best-effort */
+    }
+  }
 };
 
 // ── Banner: Minimal ───────────────────────────────────────────────────
