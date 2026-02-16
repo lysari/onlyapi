@@ -37,6 +37,7 @@ export const helpCommand = (version: string): void => {
   log(`  ${gray("─".repeat(50))}`);
 
   const initOpts = [
+    ["--full, -f", "Full enterprise template (clone from GitHub)"],
     [".", "Initialize in the current directory"],
     ["--cwd", "Same as '.' — use current directory"],
   ] as const;
@@ -67,7 +68,8 @@ export const helpCommand = (version: string): void => {
   log(`  ${gray("─".repeat(50))}`);
 
   const examples = [
-    ["onlyapi init my-api", "Create project in ./my-api"],
+    ["onlyapi init my-api", "Create minimal project in ./my-api"],
+    ["onlyapi init my-api --full", "Create full enterprise project"],
     ["onlyapi init .", "Initialize in current directory"],
     ["onlyapi upgrade", "Upgrade to latest version"],
     ["onlyapi upgrade --dry-run", "Preview upgrade without changes"],

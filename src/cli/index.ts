@@ -4,7 +4,8 @@
  * onlyApi CLI — developer tooling for scaffolding and upgrading projects.
  *
  * Usage:
- *   onlyapi init <project-name>   Create a new project
+ *   onlyapi init <name>            Create a minimal project
+ *   onlyapi init <name> --full    Create full enterprise project
  *   onlyapi upgrade               Upgrade current project
  *   onlyapi version               Show version
  *   onlyapi help                  Show help
@@ -17,7 +18,7 @@ import { blank, bold, cyan, dim, error, log, white } from "./ui.js";
 
 // ── Version ─────────────────────────────────────────────────────────────
 
-const VERSION = "1.7.0";
+const VERSION = "1.9.0";
 
 // ── Arg parsing ─────────────────────────────────────────────────────────
 

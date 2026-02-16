@@ -1,6 +1,6 @@
 {
   "name": "@enderworld/onlyapi",
-  "version": "1.7.0",
+  "version": "1.9.0",
   "description": "Zero-dependency, enterprise-grade REST API built on Bun — fastest runtime, strictest TypeScript, cleanest architecture.",
   "type": "module",
   "license": "MIT",
