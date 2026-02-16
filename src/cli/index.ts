@@ -17,7 +17,7 @@ import { blank, bold, cyan, dim, error, log, white } from "./ui.js";
 
 // ── Version ─────────────────────────────────────────────────────────────
 
-const VERSION = "1.5.1";
+const VERSION = "1.6.0";
 
 // ── Arg parsing ─────────────────────────────────────────────────────────
 
